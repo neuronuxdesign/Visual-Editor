@@ -45,6 +45,7 @@ jobs:
       - name: Build project
         run: npm run build
         env:
+          VITE_FIGMA_TOKEN: ${{ secrets.VITE_FIGMA_TOKEN }}
           BASE_URL: /Visual-Editor/
 
       - name: Setup Pages
