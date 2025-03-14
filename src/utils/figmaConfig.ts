@@ -1,7 +1,7 @@
 // Store configuration for Figma integration
 
 // Default Figma file ID - you can also store this in environment variables as VITE_FIGMA_FILE_ID
-export const DEFAULT_FIGMA_FILE_ID = 'lD6lGy8minugJQEX9go3Wg';
+export const DEFAULT_FIGMA_FILE_ID = '3NX1nspmurjj9kqyuhOKXH';
 
 // Configuration for different projects
 export const PROJECT_FIGMA_FILES = {
