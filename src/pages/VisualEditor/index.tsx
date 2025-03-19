@@ -13,6 +13,7 @@ import TreeView from '../../components/TreeView'
 import { transformFigmaVariables, groupVariablesByCollection, isObjectEmpty, generateUniqueId } from '../../utils/general'
 // Import with renamed functions to avoid conflicts
 import { formatNonColorValue as utilFormatNonColorValue, formatVariableValue as utilFormatVariableValue, findVariableByValue as utilFindVariableByValue } from '../../utils/variableUtils'
+import { FigmaVariablePayload } from '../../utils/figmaApi'
 
 /**
  * REFACTORING NOTICE
@@ -163,7 +164,7 @@ interface FigmaVariablesData {
 
 // Define types for UI state
 interface Variable {
-  id: string;
+  id?: string; // Make id optional with "?"
   name: string;
   value: string;
   rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
@@ -311,51 +312,35 @@ const VariableDropdown: React.FC<{
   
   // Generate options from all variables
   const getOptions = (): VariableOption[] => {
-    // Start with a custom option
-    const options: { original: null; isCustom: boolean; label: string; type: any; value: unknown }[] = [
-      {
-        label: 'Custom Value',
-        value: customValue,
-        isCustom: true,
-        original: null,
-        type: variable.valueType
-      }
-    ];
+    // First, get all variables that match the current variable's type
+    // This makes the dropdown more relevant by only showing compatible variables
+    const compatibleVariables = allVariables.filter(v => 
+      v.valueType === variable.valueType &&
+      // Don't include the current variable itself (if it has an id)
+      !(variable.id && v.id === variable.id && v.modeId === variable.modeId)
+    );
     
-    // Filter variables based on search term and compatible type
-    const compatibleVars = allVariables.filter(v => {
-      // Must match the variable type
-      if (v.valueType !== variable.valueType) return false;
-      
-      // Avoid referencing itself
-      if (v.id === variable.id && v.modeId === variable.modeId) return false;
-      
-      // If searching, must match search term
-      return !(searchTerm &&
-        !v.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !v.value.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-
-    });
+    // Custom option for direct input
+    const options: VariableOption[] = [{
+      label: 'Custom Value',
+      value: 'custom',
+      original: null as unknown as Variable,
+      isCustom: true,
+      type: variable.valueType
+    }];
     
-    // Add compatible variables as options
-    compatibleVars.forEach(v => {
-      if (v.isColor && v.rawValue && typeof v.rawValue === 'object' && 'r' in v.rawValue) {
+    // Add options for all compatible variables
+    compatibleVariables.forEach(v => {
+      // Only add variables that have an id
+      if (v.id) {
         options.push({
-          isCustom: false,
           label: `${v.name} (${v.collectionName})`,
-          value: v.value,
+          value: v.id,
           original: v,
-          type: 'color',
-          color: v.rawValue as RGBAValue
-        });
-      } else {
-        options.push({
-          isCustom: false,
-          label: `${v.name} (${v.collectionName})`,
-          value: v.value,
-          original: v,
-          type: v.valueType
+          type: v.valueType,
+          ...(v.isColor && v.rawValue && typeof v.rawValue === 'object' && 'r' in v.rawValue
+            ? { color: v.rawValue as RGBAValue }
+            : {})
         });
       }
     });
@@ -395,9 +380,10 @@ const VariableDropdown: React.FC<{
       // Try to find the original variable name if it's missing
       let refName = variable.referencedVariable.name;
       if (!refName || refName === 'undefined') {
-        // Look for the variable by ID in allVariables
-        const originalVar = allVariables.find(v => v.id === variable.referencedVariable?.id);
-        refName = originalVar?.name || `Variable (${variable.referencedVariable.id.substring(0, 8)}...)`;
+        // Look for the variable by ID in allVariables (safely)
+        const refId = variable.referencedVariable.id;
+        const originalVar = allVariables.find(v => v.id === refId);
+        refName = originalVar?.name || (refId ? `Variable (${refId.substring(0, 8)}...)` : 'Unknown Variable');
       }
       
       return (
@@ -424,7 +410,7 @@ const VariableDropdown: React.FC<{
           <div 
             className="color-preview" 
             style={{ 
-              backgroundColor: `rgba(${variable.value}, ${(variable.rawValue as RGBAValue).a})`,
+              backgroundColor: `rgba(${variable.value}, ${(variable.rawValue as RGBAValue)?.a || 1})`,
               width: '16px',
               height: '16px',
               borderRadius: '3px',
@@ -433,7 +419,7 @@ const VariableDropdown: React.FC<{
           />
         </div>
       );
-  } else {
+    } else {
       return <span>{variable.value}</span>;
     }
   };
@@ -505,7 +491,11 @@ function VisualEditor() {
   // figmaData is used in processVariableData and indirectly in UI rendering
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [figmaData, setFigmaData] = useState<FigmaVariablesData | null>(null);
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [variables, setVariables] = useState<Variable[]>([]);
+  const [newVariable, setNewVariable] = useState<Variable | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+  const [editingVariables, setEditingVariables] = useState<Record<string, boolean>>({});
   const [allVariables, setAllVariables] = useState<Variable[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<SelectOption>(brandOptions[0]);
   const [selectedGrade, setSelectedGrade] = useState<SelectOption>(gradeOptions[0]);
@@ -513,6 +503,11 @@ function VisualEditor() {
   const [selectedTheme, setSelectedTheme] = useState<SelectOption>(themeOptions[0]);
   const [selectedProject] = useState<SelectOption>(projectOptions[0]);
   const [modeMapping, setModeMapping] = useState<{[modeId: string]: string}>({});
+  // New state for tracking selected modes to display in the table
+  const [selectedModes, setSelectedModes] = useState<Array<{modeId: string, name: string}>>([]);
+  // State to track all available modes for the current collection
+  const [availableModes, setAvailableModes] = useState<Array<{modeId: string, name: string}>>([]);
+  
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -523,10 +518,6 @@ function VisualEditor() {
   const [figmaApiKey, setFigmaApiKey] = useState<string>('');
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [cssVariables, setCssVariables] = useState<string>('');
-
-  // Tree state
-  const [treeData, setTreeData] = useState<TreeNode[]>(initialTree);
-  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
 
   // Initialize with stored API key if available
   useEffect(() => {
@@ -793,17 +784,19 @@ function VisualEditor() {
 
   // Enhanced variable value change handler for dropdown
   const handleVariableValueChange = (variable: Variable, newValue: string, isReference = false, refVariable?: Variable) => {
-    // Find the index of the variable to update
-    const index = variables.findIndex(v => 
-      v.id === variable.id && v.modeId === variable.modeId
-    );
+    // Find the index of the variable to update - need to check if variable has an id
+    const index = variable.id 
+      ? variables.findIndex(v => v.id === variable.id && v.modeId === variable.modeId)
+      : -1;
     
     if (index === -1) return;
     
     const newVariables = [...variables];
     
     if (isReference && refVariable) {
-      // Handle reference to another variable
+      // Handle reference to another variable - ensure refVariable has an id
+      if (!refVariable.id) return;
+      
       newVariables[index].value = refVariable.value;
       newVariables[index].referencedVariable = {
         id: refVariable.id,
@@ -812,10 +805,6 @@ function VisualEditor() {
         finalValue: refVariable.rawValue,
         finalValueType: refVariable.valueType
       };
-      
-      // For a real implementation with Figma API, we'd need to update the rawValue to a variable reference
-      // In a complete implementation, the rawValue would be set to something like:
-      // { type: 'VARIABLE_ALIAS', id: refVariable.id }
       
       // For our simplified version, we'll keep the original format but add a special marker
       if (refVariable.isColor && refVariable.rawValue && typeof refVariable.rawValue === 'object' && 'r' in refVariable.rawValue) {
@@ -834,46 +823,44 @@ function VisualEditor() {
           referenceType: refVariable.valueType
         };
       }
-    }
-    else if (newVariables[index].isColor) {
-      // For color values, parse the comma-separated RGB values
-      const [r, g, b] = newValue.split(',').map(v => parseInt(v.trim(), 10));
+    } else {
+      // Handle direct value update (not a reference)
+      newVariables[index].value = newValue;
       
-      // Validate the values
-      if (isNaN(r) || isNaN(g) || isNaN(b) || r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
-        alert('Please enter valid RGB values (0-255, comma-separated)');
-        return;
+      // For colors, we need to parse the r,g,b values
+      if (variable.isColor) {
+        const [r, g, b] = newValue.split(',').map(num => parseFloat(num.trim()));
+        const oldValue = variable.rawValue as RGBAValue;
+        newVariables[index].rawValue = {
+          r, g, b,
+          a: oldValue.a || 1  // Preserve alpha if it exists
+        };
+      } else {
+        // For other types, we need to convert the value appropriately
+        switch (variable.valueType) {
+          case 'NUMBER':
+            newVariables[index].rawValue = parseFloat(newValue);
+            break;
+          case 'BOOLEAN':
+            newVariables[index].rawValue = newValue === 'true';
+            break;
+          default:  // STRING and others
+            newVariables[index].rawValue = newValue;
+        }
       }
       
-      // Update the display value and raw value
-      newVariables[index].value = `${r}, ${g}, ${b}`;
-      newVariables[index].rawValue = {
-        r: r / 255,
-        g: g / 255,
-        b: b / 255,
-        a: (newVariables[index].rawValue as RGBAValue).a // Keep original alpha
-      };
-      
-      // Clear reference if any
-      newVariables[index].referencedVariable = undefined;
-    } else {
-      // For non-color values, just update the value as is
-      newVariables[index].value = newValue;
-      // Clear reference if any
-      newVariables[index].referencedVariable = undefined;
+      // Clear any reference data
+      delete newVariables[index].referencedVariable;
     }
     
     setVariables(newVariables);
     
-    // Also update the variable in allVariables to keep them in sync
-    const allVarsIndex = allVariables.findIndex(v => 
-      v.id === newVariables[index].id && v.modeId === newVariables[index].modeId
-    );
-    
-    if (allVarsIndex !== -1) {
-      const newAllVariables = [...allVariables];
-      newAllVariables[allVarsIndex] = newVariables[index];
-      setAllVariables(newAllVariables);
+    // Mark this variable as being edited - safely handle optional id
+    if (variable.id) {
+      setEditingVariables(prev => ({
+        ...prev,
+        [`${variable.id}-${variable.modeId}`]: true
+      }));
     }
   };
 
@@ -1243,6 +1230,573 @@ function VisualEditor() {
     document.body.removeChild(element);
   };
 
+  // Function to create a new variable placeholder
+  const handleCreateVariable = () => {
+    if (selectedNodeId) {
+      const selectedNode = findNodeById(treeData, selectedNodeId);
+      
+      if (selectedNode && selectedNode.type === 'folder') {
+        // Get the current mode details
+        const currentModeIdentifier = `${selectedBrand.value}-${selectedGrade.value}-${selectedDevice.value}-${selectedTheme.value}`;
+        const matchingModeIds = Object.entries(modeMapping).filter(([, identifier]) => {
+          return identifier === currentModeIdentifier;
+        }).map(([modeId]) => modeId);
+        
+        // Use the first matching mode or default
+        const modeId = matchingModeIds.length > 0 ? matchingModeIds[0] : '0:0';
+        
+        // Create empty variable without an id
+        const newVar: Variable = {
+          // No id for new variables - Figma will generate one
+          name: 'New Variable',
+          value: '',
+          rawValue: '',
+          modeId,
+          collectionName: selectedNode.name,
+          isColor: false,
+          valueType: 'STRING'
+        };
+        
+        setNewVariable(newVar);
+      }
+    }
+  };
+  
+  // Helper function to find a node by ID in the tree
+  const findNodeById = (nodes: TreeNode[], id: string): TreeNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
+      }
+      if (node.children) {
+        const found = findNodeById(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  
+  // Helper function to format color values for Figma API (ensuring 0-1 range)
+  const formatColorForFigma = (value: unknown): RGBAValue => {
+    // If it's a string of RGB values like "241, 1, 1"
+    if (typeof value === 'string') {
+      const [r, g, b] = value.split(',').map(val => parseFloat(val.trim()));
+      return {
+        r: r / 255,
+        g: g / 255,
+        b: b / 255,
+        a: 1
+      };
+    }
+    
+    // If it's already an RGBA object
+    if (value && typeof value === 'object' && 'r' in value && 'g' in value && 'b' in value) {
+      const rgba = value as RGBAValue;
+      // Always normalize to 0-1 range
+      return {
+        r: rgba.r > 1 ? rgba.r / 255 : rgba.r,
+        g: rgba.g > 1 ? rgba.g / 255 : rgba.g,
+        b: rgba.b > 1 ? rgba.b / 255 : rgba.b,
+        a: rgba.a || 1
+      };
+    }
+    
+    // Default value for invalid input
+    return { r: 0, g: 0, b: 0, a: 1 };
+  };
+
+  // Helper function to prepare variable payload for Figma API to reduce duplication
+  const prepareVariablePayload = (variable: Variable, action: 'CREATE' | 'UPDATE', collectionId?: string): Record<string, unknown> => {
+    // Ensure value is in the correct format for Figma API
+    let formattedValue = variable.rawValue || '';
+    
+    // For color variables, ensure proper RGBA format
+    if (variable.isColor) {
+      formattedValue = formatColorForFigma(variable.rawValue || variable.value);
+    }
+    
+    if (action === 'CREATE') {
+      return {
+        name: variable.name,
+        variableCollectionId: collectionId, // Use the passed collection ID instead
+        resolvedType: variable.valueType,
+        valuesByMode: {
+          [variable.modeId]: formattedValue
+        },
+        description: variable.description || '',
+        hiddenFromPublishing: false,
+        action: 'CREATE'
+      };
+    } else {
+      return {
+        id: variable.id,
+        action: 'UPDATE',
+        variableCollectionId: collectionId, // Include collection ID for updates too!
+        valuesByMode: {
+          [variable.modeId]: formattedValue
+        }
+      };
+    }
+  };
+
+  // Fix the handleSaveNewVariable function to handle variableId properly
+  const handleSaveNewVariable = async () => {
+    if (!newVariable) return;
+    
+    try {
+      setIsLoading(true);
+      setLoadingMessage('Creating new variable in Figma...');
+      
+      // Find collection for the current folder
+      const selectedNode = findNodeById(treeData, selectedNodeId);
+      if (!selectedNode) throw new Error('Selected node not found');
+      
+      // Get the file ID from config
+      const fileId = figmaConfig.getStoredFigmaFileId();
+      
+      // Find a valid collection ID
+      let collectionId = '';
+      let selectedCollection = null;
+      
+      // If the selectedNode represents a collection directly
+      if (figmaData?.meta?.variableCollections) {
+        // Try to find a collection with matching name
+        for (const [id, collection] of Object.entries(figmaData.meta.variableCollections)) {
+          if (collection.name === selectedNode.name) {
+            collectionId = id;
+            selectedCollection = collection;
+            break;
+          }
+        }
+      }
+      
+      // If we couldn't find a matching collection, use the first one as fallback
+      if (!collectionId && figmaData?.meta?.variableCollections) {
+        const collectionIds = Object.keys(figmaData.meta.variableCollections);
+        if (collectionIds.length > 0) {
+          collectionId = collectionIds[0];
+          selectedCollection = figmaData.meta.variableCollections[collectionId];
+        }
+      }
+      
+      if (!collectionId || !selectedCollection) {
+        throw new Error('Could not find a valid variable collection ID. Please check if you have collections in your Figma file.');
+      }
+      
+      // Ensure value is in the correct format for Figma API
+      const formattedValue = newVariable.isColor 
+        ? formatColorForFigma(newVariable.rawValue || newVariable.value)
+        : newVariable.rawValue || '';
+      
+      // Here's the key issue:
+      // We need to create a variable and set initial values for all modes
+      // We need to use the exact structure expected by the Figma API
+      
+      // Let's try a different approach based on the Figma API documentation
+      // We'll create a two-step process:
+      
+      // Step 1: Create the variable 
+      const variableCreate = {
+        // This needs to match the actual Figma API interface
+        variables: [
+          {
+            name: newVariable.name,
+            action: "CREATE",
+            resolvedType: newVariable.valueType,
+            variableCollectionId: collectionId,
+            // Add valuesByMode to set initial value during creation
+            valuesByMode: {
+              // Use the default mode ID from the collection
+              [selectedCollection.defaultModeId || newVariable.modeId]: formattedValue
+            }
+          }
+        ]
+      };
+      
+      console.log('Step 1: Creating the variable with initial value:', JSON.stringify(variableCreate));
+      
+      // Create the variable
+      await figmaApi.postVariables(fileId, variableCreate);
+      
+      // Step 2: Now that the variable exists, we need to get its ID
+      // Refresh to get the latest variables including our new one
+      const updatedVariables = await figmaApi.getLocalVariables(fileId);
+      
+      // Find our new variable by name in the collection
+      let newVariableId = '';
+      if (updatedVariables && updatedVariables.meta && updatedVariables.meta.variables) {
+        for (const [id, variable] of Object.entries(updatedVariables.meta.variables)) {
+          const varObj = variable as any; // Avoid type errors with dynamic data
+          if (varObj.name === newVariable.name && 
+              varObj.variableCollectionId === collectionId) {
+            newVariableId = id;
+            break;
+          }
+        }
+      }
+      
+      if (!newVariableId) {
+        throw new Error("Failed to find the newly created variable. Please check if it was created.");
+      }
+      
+      // Step 3: Now set values for all modes
+      const modeValues = [];
+      
+      // Get all modes from the collection
+      const allModes = selectedCollection.modes || [];
+      
+      // Create a variableModeValues entry for each mode
+      for (const mode of allModes) {
+        // Skip the default mode since we already set it in the first step
+        if (mode.modeId === selectedCollection.defaultModeId) {
+          continue;
+        }
+        
+        modeValues.push({
+          variableId: newVariableId,
+          modeId: mode.modeId,
+          value: formattedValue
+        });
+      }
+      
+      // Only update if we have modes to update
+      if (modeValues.length > 0) {
+        // Update the variable with mode values
+        const valueUpdate = {
+          variableModeValues: modeValues
+        };
+        
+        console.log('Step 2: Setting values for additional modes:', JSON.stringify(valueUpdate));
+        
+        // Update the variable with values for all modes
+        await figmaApi.postVariables(fileId, valueUpdate);
+      } else {
+        console.log('No additional modes to set values for - skipping step 2');
+      }
+      
+      // Refresh variables again to get the updated data
+      const finalData = await figmaApi.getLocalVariables(fileId);
+      processVariableData(finalData);
+      
+      // Clear the new variable state
+      setNewVariable(null);
+      
+      setLoadingMessage('Variable created successfully!');
+      setTimeout(() => {
+        setLoadingMessage('');
+        setIsLoading(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error creating variable:', error);
+      
+      // Extract detailed error message if available
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Check for Axios error with response data
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { 
+          response?: { 
+            data?: { 
+              message?: string;
+              status?: number;
+            } 
+          } 
+        };
+        
+        if (axiosError.response?.data?.message) {
+          errorMessage = `Figma API Error: ${axiosError.response.data.message}`;
+        }
+      }
+      
+      setErrorMessage(`Error creating variable: ${errorMessage}`);
+      setIsLoading(false);
+    }
+  };
+  
+  // Function to handle saving edited variables
+  const handleSaveVariable = async (variable: Variable) => {
+    try {
+      // Make sure we have an ID before proceeding with update
+      if (!variable.id) {
+        setErrorMessage('Cannot update variable: missing ID');
+        return;
+      }
+      
+      setIsLoading(true);
+      setLoadingMessage('Saving variable to Figma...');
+      
+      // Get the file ID from config
+      const fileId = figmaConfig.getStoredFigmaFileId();
+      
+      // Find the variable collection ID - this is required for updates
+      let variableCollectionId = '';
+      
+      if (figmaData?.meta?.variables && figmaData.meta.variableCollections) {
+        // Find the original variable to get its collection ID
+        const originalVariable = variable.id ? figmaData.meta.variables[variable.id] : undefined;
+        if (originalVariable) {
+          variableCollectionId = originalVariable.variableCollectionId;
+          console.log(`Found collection ID for variable: ${variableCollectionId}`);
+        }
+      }
+      
+      if (!variableCollectionId) {
+        // If we couldn't find the ID directly, try to find it by collection name
+        if (figmaData?.meta?.variableCollections) {
+          for (const [id, collection] of Object.entries(figmaData.meta.variableCollections)) {
+            if (collection.name === variable.collectionName) {
+              variableCollectionId = id;
+              console.log(`Found collection ID by name: ${variableCollectionId}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!variableCollectionId) {
+        throw new Error('Could not find variable collection ID. This is required to update the variable.');
+      }
+      
+      // Ensure value is in the correct format for Figma API
+      let formattedValue = variable.rawValue || '';
+      
+      // For color variables, ensure proper RGBA format
+      if (variable.isColor) {
+        formattedValue = formatColorForFigma(variable.rawValue || variable.value);
+        console.log('Formatted color value:', JSON.stringify(formattedValue));
+      }
+      
+      // Prepare the API request data using the correct structure
+      const variableData = {
+        variables: [
+          {
+            action: "UPDATE",
+            id: variable.id,
+            variableCollectionId: variableCollectionId,
+          }
+        ],
+        variableModeValues: [
+          {
+            variableId: variable.id,
+            modeId: variable.modeId,
+            value: formattedValue
+          }
+        ]
+      };
+      
+      console.log('Payload structure for Figma API:', JSON.stringify(variableData, null, 2));
+      console.log('Sending to Figma API:', JSON.stringify(variableData));
+      
+      // Send to Figma API
+      await figmaApi.postVariables(fileId, variableData);
+      
+      // Clear the editing state for this variable
+      if (editingVariables[`${variable.id}-${variable.modeId}`]) {
+        setEditingVariables({
+          ...editingVariables,
+          [`${variable.id}-${variable.modeId}`]: false
+        });
+      }
+      
+      setLoadingMessage('Variable saved successfully!');
+      setTimeout(() => {
+        setLoadingMessage('');
+        setIsLoading(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error saving variable:', error);
+      
+      // Extract detailed error message if available
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Check for Axios error with response data
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { 
+          response?: { 
+            data?: { 
+              message?: string;
+              status?: number;
+            } 
+          } 
+        };
+        
+        if (axiosError.response?.data?.message) {
+          errorMessage = `Figma API Error: ${axiosError.response.data.message}`;
+        }
+      }
+      
+      setErrorMessage(`Error saving variable: ${errorMessage}`);
+      setIsLoading(false);
+    }
+  };
+  
+  // Function to handle updating the new variable's name
+  const handleUpdateNewVariableName = (name: string) => {
+    if (newVariable) {
+      setNewVariable({
+        ...newVariable,
+        name
+      });
+    }
+  };
+  
+  // Function to handle updating the new variable's value
+  const handleUpdateNewVariableValue = (value: string) => {
+    if (newVariable) {
+      // Copy the current variable to modify it
+      const updatedVariable = { ...newVariable, value };
+      
+      // For colors, we need to parse the r,g,b values when it's a direct value
+      if (newVariable.isColor) {
+        // Handle empty string case - use a default black color (0,0,0)
+        if (!value.trim()) {
+          updatedVariable.value = '0, 0, 0';
+          updatedVariable.rawValue = {r: 0, g: 0, b: 0, a: 1};
+        } else {
+          // Parse the RGB values
+          const [r, g, b] = value.split(',').map(num => parseFloat(num.trim()));
+          
+          // Avoid setting invalid values
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+            updatedVariable.rawValue = {
+              r: r > 1 ? r : r * 255, // Normalize to 0-255 range
+              g: g > 1 ? g : g * 255,
+              b: b > 1 ? b : b * 255,
+              a: 1 // Default alpha
+            };
+          } else {
+            // If invalid values, use a default black color
+            updatedVariable.value = '0, 0, 0';
+            updatedVariable.rawValue = {r: 0, g: 0, b: 0, a: 1};
+          }
+        }
+      } else {
+        // For other types, just set the raw value to the string value
+        updatedVariable.rawValue = value;
+      }
+      
+      // Clear any reference data when directly updating the value
+      delete updatedVariable.referencedVariable;
+      
+      setNewVariable(updatedVariable);
+    }
+  };
+  
+  // Function to handle changing the new variable's type
+  const handleChangeNewVariableType = (type: string) => {
+    if (newVariable) {
+      const isColor = type === 'COLOR';
+      let rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown> = '';
+      let initialValue = newVariable.value;
+      
+      // Convert the raw value based on the new type
+      if (isColor) {
+        // Start with default black color
+        initialValue = '0, 0, 0';
+        rawValue = {r: 0, g: 0, b: 0, a: 1};
+      } else if (type === 'NUMBER') {
+        initialValue = '0';
+        rawValue = 0;
+      } else if (type === 'BOOLEAN') {
+        initialValue = 'false';
+        rawValue = false;
+      } else {
+        initialValue = '';
+        rawValue = '';
+      }
+      
+      setNewVariable({
+        ...newVariable,
+        valueType: type,
+        isColor,
+        value: initialValue,
+        rawValue,
+        // Clear any reference when changing type
+        referencedVariable: undefined
+      });
+    }
+  };
+  
+  // Function to cancel creating a new variable
+  const handleCancelNewVariable = () => {
+    setNewVariable(null);
+  };
+
+  // Function to handle opening the color picker
+  const handleColorPickerOpen = (variableIndex: number) => {
+    if (variableIndex === -1 || !variables[variableIndex]) return;
+    
+    const variable = variables[variableIndex];
+    if (!variable.isColor) return;
+    
+    // Get the raw color value
+    const rgba = variable.rawValue as RGBAValue;
+    
+    // Set the active color for the picker
+    setActiveColorIndex(variableIndex);
+    setTempColor({
+      r: rgba.r,
+      g: rgba.g,
+      b: rgba.b,
+      a: rgba.a || 1
+    });
+    
+    // Show the color picker (position will be set by the component)
+    setColorPickerPosition({ top: 100, left: 100 });
+    setShowColorPicker(true);
+  };
+
+  // Fix the clearEditingState function
+  const clearEditingState = (variableToEdit: Variable) => {
+    if (variableToEdit.id) {
+      setEditingVariables(prev => ({
+        ...prev,
+        [`${variableToEdit.id}-${variableToEdit.modeId}`]: false
+      }));
+    }
+  };
+
+  // Helper function to get modes for the current collection
+  const getCurrentCollectionModes = () => {
+    if (!selectedNodeId || !figmaData?.meta?.variableCollections) return [];
+    
+    // Find the collection for the selected node
+    const selectedNode = findNodeById(treeData, selectedNodeId);
+    if (!selectedNode) return [];
+    
+    // Get collection ID
+    let collectionId = '';
+    for (const [id, collection] of Object.entries(figmaData.meta.variableCollections)) {
+      if (collection.name === selectedNode.name) {
+        collectionId = id;
+        break;
+      }
+    }
+    
+    if (!collectionId) return [];
+    
+    // Get modes for this collection
+    const collection = figmaData.meta.variableCollections[collectionId];
+    return collection?.modes || [];
+  };
+
+  // Update available modes when selected node changes
+  useEffect(() => {
+    const modes = getCurrentCollectionModes();
+    setAvailableModes(modes);
+    
+    // Select the first mode by default
+    if (modes.length > 0 && selectedModes.length === 0) {
+      setSelectedModes([modes[0]]);
+    }
+  }, [selectedNodeId, figmaData]);
+
   return (
     <div className="app-container">
       <div className="sidebar">
@@ -1379,36 +1933,30 @@ function VisualEditor() {
                   
                   const selectedNode = findNode(treeData);
                   
-                  // If it's a folder, show its contents
+                  // If it's a folder, show its variables
                   if (selectedNode && selectedNode.type === 'folder') {
-                    // Find all variables that belong to this folder
-                    let folderVariables: Variable[] = [];
+                    // Find all child variables
+                    let folderVariables = variables.filter(v => selectedNode.children?.some(child => child.id === v.id));
                     
-                    // If this is a collection folder (top-level)
-                    if (selectedNode.id.indexOf('-') === -1) {
-                      // Collection folder - find all variables in this collection
-                      folderVariables = allVariables.filter(v => 
-                        v.collectionName === selectedNode.name
-                      );
-                    } else {
-                      // Type folder (e.g., Colors) - find all variables of this type in the collection
-                      const [collectionId, variableType] = selectedNode.id.split('-');
-                      const collectionNode = treeData.find(node => node.id === collectionId);
+                    // If this node has parent collections, find their variables too
+                    if (selectedNode.children?.some(child => child.type === 'folder')) {
+                      // Collect all leaf node IDs from all child folders
+                      const childIds: string[] = [];
                       
-                      if (collectionNode) {
-                        // Find all variables that match this type and collection
-                        folderVariables = allVariables.filter(v => 
-                          v.collectionName === collectionNode.name && 
-                          v.valueType.toLowerCase() === variableType
-                        );
-                      }
+                      const collectChildIds = (nodes: TreeNode[] | undefined) => {
+                        if (!nodes) return;
+                        
+                        for (const node of nodes) {
+                          if (node.type === 'file') {
+                            childIds.push(node.id);
+                          } else if (node.children) {
+                            collectChildIds(node.children);
+                          }
+                        }
+                      };
                       
-                      // If using direct children from the tree instead
-                      if (folderVariables.length === 0 && selectedNode.children) {
-                        // Use the node's children IDs to find variables
-                        const childIds = selectedNode.children.map(child => child.id);
-                        folderVariables = allVariables.filter(v => childIds.includes(v.id));
-                      }
+                      collectChildIds(selectedNode.children);
+                      folderVariables = allVariables.filter(v => childIds.includes(v.id));
                     }
                     
                     return (
@@ -1418,77 +1966,249 @@ function VisualEditor() {
                           {folderVariables.length} variable{folderVariables.length !== 1 ? 's' : ''} found
                         </p>
                         
-                        {folderVariables.length > 0 && (
-        <div className="variables-table">
-            <table>
-              <thead>
-                <tr>
-                                  <th style={{ width: '40px' }}></th>
-                                  <th>Name</th>
-                  <th>Value</th>
-                                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                                {folderVariables.map((variable) => (
-                                  <tr 
-                                    key={`${variable.id}-${variable.modeId}`}
-                                    className="variable-row"
-                                  >
-                                    <td>
+                        <div className="variables-table-header">
+                          <button 
+                            className="create-variable-btn"
+                            onClick={handleCreateVariable}
+                          >
+                            Create Variable
+                          </button>
+                          
+                          {/* Mode selector */}
+                          {availableModes.length > 0 && (
+                            <div className="mode-selector">
+                              <label>Modes:</label>
+                              <div className="mode-multiselect">
+                                <Select
+                                  isMulti
+                                  className="react-select-container"
+                                  classNamePrefix="react-select"
+                                  placeholder="Select modes to display"
+                                  value={selectedModes.map(mode => ({
+                                    value: mode.modeId,
+                                    label: mode.name
+                                  }))}
+                                  options={availableModes.map(mode => ({
+                                    value: mode.modeId,
+                                    label: mode.name
+                                  }))}
+                                  onChange={(options) => {
+                                    // Handle empty selection - always keep at least one mode
+                                    if (!options || options.length === 0) {
+                                      if (availableModes.length > 0) {
+                                        setSelectedModes([availableModes[0]]);
+                                      }
+                                      return;
+                                    }
+                                    
+                                    // Update selected modes
+                                    const newSelectedModes = options.map(option => {
+                                      const mode = availableModes.find(m => m.modeId === option.value);
+                                      return mode || { modeId: option.value, name: option.label };
+                                    });
+                                    
+                                    setSelectedModes(newSelectedModes);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="variables-table multi-mode-table">
+                            <div className="variables-row variables-header">
+                              <div className="variable-cell variable-info-cell">Variable</div>
+                              {/* Render columns for each selected mode */}
+                              {selectedModes.map(mode => (
+                                <div key={mode.modeId} className="variable-cell variable-mode-value-cell">
+                                  {mode.name}
+                                </div>
+                              ))}
+                              <div className="variable-cell variable-actions-cell">Actions</div>
+                            </div>
+
+                            {/* New variable row */}
+                            {newVariable && (
+                              <div className="variables-row new-variable-row">
+                                <div className="variable-cell variable-info-cell">
+                                  <div className="variable-info-content">
+                                    {newVariable.isColor && (
+                                      <div 
+                                        className="color-preview" 
+                                        style={{ 
+                                          backgroundColor: newVariable.referencedVariable && newVariable.referencedVariable.finalValueType === 'color'
+                                            ? `rgba(${newVariable.value}, ${(newVariable.referencedVariable.finalValue as RGBAValue)?.a || 1})`
+                                            : newVariable.value 
+                                              ? `rgba(${newVariable.value}, ${(newVariable.rawValue as RGBAValue)?.a || 1})`
+                                              : `rgba(0, 0, 0, 1)`,
+                                          width: '24px',
+                                          height: '24px',
+                                          borderRadius: '4px',
+                                          border: '1px solid #ddd'
+                                        }}
+                                      />
+                                    )}
+                                    <div className="variable-name">
+                                      <input
+                                        type="text"
+                                        value={newVariable.name}
+                                        onChange={(e) => handleUpdateNewVariableName(e.target.value)}
+                                        placeholder="Variable name"
+                                        className="variable-name-input"
+                                      />
+                                    </div>
+                                    <div className="variable-type">
+                                      <select
+                                        value={newVariable.valueType}
+                                        onChange={(e) => handleChangeNewVariableType(e.target.value)}
+                                        className="variable-type-select"
+                                      >
+                                        <option value="STRING">STRING</option>
+                                        <option value="COLOR">COLOR</option>
+                                        <option value="NUMBER">NUMBER</option>
+                                        <option value="BOOLEAN">BOOLEAN</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* New variable value cells for each mode */}
+                                {selectedModes.map(mode => (
+                                  <div key={mode.modeId} className="variable-cell variable-mode-value-cell">
+                                    {newVariable.isColor ? (
+                                      <VariableDropdown 
+                                        variable={newVariable}
+                                        allVariables={allVariables}
+                                        onValueChange={(variable, newValue, isReference, refVariable) => {
+                                          if (isReference && refVariable) {
+                                            // Handle reference selection
+                                            setNewVariable({
+                                              ...newVariable,
+                                              value: newValue,
+                                              rawValue: refVariable.rawValue,
+                                              referencedVariable: {
+                                                id: refVariable.id || '',
+                                                collection: refVariable.collectionName,
+                                                name: refVariable.name || '',
+                                                finalValue: refVariable.rawValue,
+                                                finalValueType: refVariable.valueType
+                                              }
+                                            });
+                                          } else {
+                                            // Handle direct value
+                                            handleUpdateNewVariableValue(newValue);
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        value={newVariable.value}
+                                        onChange={(e) => handleUpdateNewVariableValue(e.target.value)}
+                                        placeholder="Variable value"
+                                        className="variable-value-input"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                                
+                                <div className="variable-cell variable-actions-cell">
+                                  <div className="variable-actions">
+                                    <button
+                                      className="save-variable-btn"
+                                      onClick={handleSaveNewVariable}
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      className="cancel-variable-btn"
+                                      onClick={handleCancelNewVariable}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Existing variables */}
+                            {folderVariables.map((variable) => {
+                              // Get variables for all selected modes
+                              const modeVariables = selectedModes.map(mode => {
+                                return allVariables.find(v => 
+                                  v.id === variable.id && 
+                                  v.modeId === mode.modeId
+                                ) || null;
+                              });
+                              
+                              return (
+                                <div 
+                                  key={`${variable.id}-row`}
+                                  className="variables-row"
+                                >
+                                  <div className="variable-cell variable-info-cell">
+                                    <div className="variable-info-content">
                                       {variable.isColor && (
-                        <div 
-                          className="color-preview" 
-                          style={{ 
+                                        <div 
+                                          className="color-preview" 
+                                          style={{ 
                                             backgroundColor: variable.referencedVariable && variable.referencedVariable.finalValueType === 'color'
                                               ? `rgba(${variable.value}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`
                                               : `rgba(${variable.value}, ${(variable.rawValue as RGBAValue).a})`,
                                             width: '24px',
                                             height: '24px',
-                            borderRadius: '4px',
+                                            borderRadius: '4px',
                                             border: '1px solid #ddd'
                                           }}
                                         />
                                       )}
-                                    </td>
-                                    <td>{variable.name}</td>
-                                    <td className="value-cell">
-                                      <VariableDropdown 
-                                        variable={variable}
-                                        allVariables={allVariables}
-                                        onValueChange={handleVariableValueChange}
-                                      />
-                                    </td>
-                                    <td>
-                                      {variable.referencedVariable ? (
-                                        <div className="reference-type" title={`Variable ID: ${variable.referencedVariable.id}`}>
-                                          <span className="reference-indicator">→</span>
-                                          <span>{variable.valueType}</span>
-                                          <div className="reference-details">
-                                            Reference to: <span className="reference-name">
-                                              {(() => {
-                                                // Try to find the original variable name if it's missing
-                                                let refName = variable.referencedVariable.name;
-                                                if (!refName || refName === 'undefined') {
-                                                  // Look for the variable by ID in allVariables
-                                                  const originalVar = allVariables.find(v => v.id === variable.referencedVariable?.id);
-                                                  refName = originalVar?.name || `Variable (${variable.referencedVariable.id.substring(0, 8)}...)`;
-                                                }
-                                                return `${refName} (${variable.referencedVariable.collection})`;
-                                              })()}
-                                            </span>
+                                      <div className="variable-name">{variable.name}</div>
+                                      <div className="variable-type">
+                                        {variable.referencedVariable ? (
+                                          <div className="reference-type" title={`Variable ID: ${variable.referencedVariable.id}`}>
+                                            <span className="reference-indicator">→</span>
+                                            <span>{variable.valueType}</span>
                                           </div>
-                                        </div>
+                                        ) : (
+                                          variable.valueType
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Render values for each mode */}
+                                  {modeVariables.map((modeVar, index) => (
+                                    <div 
+                                      key={`${variable.id}-${selectedModes[index].modeId}`} 
+                                      className="variable-cell variable-mode-value-cell"
+                                    >
+                                      {modeVar ? (
+                                        <VariableDropdown 
+                                          variable={modeVar}
+                                          allVariables={allVariables}
+                                          onValueChange={handleVariableValueChange}
+                                        />
                                       ) : (
-                                        variable.valueType
+                                        <span className="no-value">No value for this mode</span>
                                       )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                    </div>
+                                  ))}
+                                  
+                                  <div className="variable-cell variable-actions-cell">
+                                    {variable.id && editingVariables[`${variable.id}-${variable.modeId}`] && (
+                                      <button 
+                                        className="save-variable-btn"
+                                        onClick={() => handleSaveVariable(variable)}
+                                      >
+                                        Save
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
+
                       </div>
                     );
                   }
@@ -1508,80 +2228,74 @@ function VisualEditor() {
                             </div>
                             
                             <div className="property-row">
+                              <div className="property-label">Collection:</div>
+                              <div className="property-value">{variableData.collectionName}</div>
+                            </div>
+                            
+                            {variableData.description && (
+                              <div className="property-row">
+                                <div className="property-label">Description:</div>
+                                <div className="property-value">{variableData.description}</div>
+                              </div>
+                            )}
+                            
+                            <div className="property-row">
                               <div className="property-label">Value:</div>
                               <div className="property-value">
                                 {variableData.isColor ? (
                                   <div className="color-editor">
-                                    <input 
-                                      type="text"
-                                      value={variableData.value}
-                                      onChange={(e) => {
-                                        const index = variables.findIndex(v => v.id === variableData.id && v.modeId === variableData.modeId);
-                                        if (index !== -1) {
-                                          handleVariableValueChange(variables[index], e.target.value);
-                                        }
-                                      }}
-                                    />
                                     <div 
-                                      className="color-preview" 
-                                style={{ 
+                                      className="color-preview"
+                                      style={{ 
                                         backgroundColor: `rgba(${variableData.value}, ${(variableData.rawValue as RGBAValue).a})`,
-                                        width: '30px',
-                                        height: '30px',
-                                  borderRadius: '4px',
-                                  border: '1px solid #ddd'
-                                }} 
-                                      onClick={(e) => {
-                                        const index = variables.findIndex(v => v.id === variableData.id && v.modeId === variableData.modeId);
-                                        if (index !== -1) {
-                                          // Call original function with the index
-                                          const variable = variables[index];
-                                          if (!variable.isColor) return;
-                                          
-                                          const rgba = variable.rawValue as RGBAValue;
-                                          
-                                          // Set the active color for the picker
-                                          setActiveColorIndex(index);
-                                          setTempColor({
-                                            r: Math.round(rgba.r * 255),
-                                            g: Math.round(rgba.g * 255),
-                                            b: Math.round(rgba.b * 255),
-                                            a: rgba.a
-                                          });
-                                          
-                                          // Calculate position for the popover
-                                          const rect = e.currentTarget.getBoundingClientRect();
-                                          setColorPickerPosition({
-                                            top: rect.bottom + window.scrollY + 5,
-                                            left: rect.left + window.scrollX - 100 // Center the popover
-                                          });
-                                          
-                                          // Show the color picker
-                                          setShowColorPicker(true);
-                                        }
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ddd'
                                       }}
+                                      onClick={() => handleColorPickerOpen(allVariables.indexOf(variableData))}
                                     />
-                            </div>
+                                    <input 
+                                      type="text" 
+                                      value={variableData.value}
+                                      onChange={(e) => handleVariableValueChange(variableData, e.target.value)}
+                                      placeholder="RGB values"
+                                    />
+                                  </div>
                                 ) : (
-                                  <span>{variableData.value}</span>
+                                  <input 
+                                    type="text" 
+                                    value={variableData.value}
+                                    onChange={(e) => handleVariableValueChange(variableData, e.target.value)}
+                                    placeholder="Variable value"
+                                  />
                                 )}
-                          </div>
+                              </div>
                             </div>
                             
-                            <div className="property-row">
-                              <div className="property-label">Collection:</div>
-                              <div className="property-value">{variableData.collectionName}</div>
-                            </div>
+                            {editingVariables[`${variableData.id}-${variableData.modeId}`] && (
+                              <div className="property-row">
+                                <div className="property-label"></div>
+                                <div className="property-value">
+                                  <button 
+                                    className="save-variable-btn"
+                                    onClick={() => handleSaveVariable(variableData)}
+                                  >
+                                    Save Changes
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
                     }
-                    }
-                    
-                    return (
+                  }
+                  
+                  return (
                     <div className="no-selection">
-                      <p>Select a variable from the sidebar to view its details.</p>
-                            </div>
+                      <p>Select a variable collection or variable from the left to view and edit its properties.</p>
+                    </div>
                   );
                 })()}
               </div>
@@ -1594,145 +2308,6 @@ function VisualEditor() {
         </div>
         </div>
       </div>
-
-      {/* Color picker popup */}
-      {showColorPicker && activeColorIndex !== null && (
-        <div 
-          className="color-picker-popover"
-          style={{
-            top: `${colorPickerPosition.top}px`,
-            left: `${colorPickerPosition.left}px`
-          }}
-        >
-          <div className="color-picker-header">
-            <h3>Edit Color</h3>
-            <button className="close-button" onClick={handleCloseColorPicker}>×</button>
-          </div>
-          <div className="color-picker-content">
-            <div className="color-preview-large" 
-              style={{ 
-                backgroundColor: `rgba(${tempColor.r}, ${tempColor.g}, ${tempColor.b}, ${tempColor.a})`
-              }} 
-            />
-            
-            {/* Color gradient selector */}
-            <div className="color-gradient">
-              <div className="hue-slider">
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="360" 
-                  className="hue-range"
-                  onChange={(e) => {
-                    // Convert hue to RGB and update tempColor
-                    const hue = parseInt(e.target.value);
-                    const rgb = hueToRgb(hue);
-                    setTempColor({...tempColor, ...rgb});
-                  }}
-                />
-              </div>
-              <div className="saturation-brightness-area"
-                style={{
-                  backgroundColor: `hsl(${rgbToHue(tempColor.r, tempColor.g, tempColor.b)}, 100%, 50%)`
-                }}
-                onClick={(e) => {
-                  // Calculate saturation and brightness from click position
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = e.clientX - rect.left; // x position within the element
-                  const y = e.clientY - rect.top;  // y position within the element
-                  
-                  const s = Math.max(0, Math.min(100, (x / rect.width) * 100));
-                  const v = Math.max(0, Math.min(100, 100 - (y / rect.height) * 100));
-                  
-                  // Convert HSV to RGB
-                  const hue = rgbToHue(tempColor.r, tempColor.g, tempColor.b);
-                  const rgb = hsvToRgb(hue, s / 100, v / 100);
-                  setTempColor({...tempColor, ...rgb});
-                }}
-              >
-                <div className="saturation-brightness-pointer"
-                  style={{
-                    left: `${getSaturation(tempColor.r, tempColor.g, tempColor.b) * 100}%`,
-                    top: `${100 - getBrightness(tempColor.r, tempColor.g, tempColor.b) * 100}%`
-                  }}
-                />
-              </div>
-            </div>
-            
-            <div className="color-inputs">
-              <div className="color-input-group">
-                <label>R:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="255" 
-                  value={tempColor.r}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 255) {
-                      setTempColor({...tempColor, r: value});
-                    }
-                  }}
-                />
-              </div>
-              <div className="color-input-group">
-                <label>G:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="255" 
-                  value={tempColor.g}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 255) {
-                      setTempColor({...tempColor, g: value});
-                    }
-                  }}
-                />
-              </div>
-              <div className="color-input-group">
-                <label>B:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="255" 
-                  value={tempColor.b}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 255) {
-                      setTempColor({...tempColor, b: value});
-                    }
-                  }}
-                />
-              </div>
-              <div className="color-input-group">
-                <label>A:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="1" 
-                  step="0.1"
-                  value={tempColor.a}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 1) {
-                      setTempColor({...tempColor, a: value});
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            
-            <div className="color-actions">
-              <button onClick={() => {
-                handleColorChange(tempColor);
-                setShowColorPicker(false);
-              }}>Apply</button>
-              <button onClick={handleCloseColorPicker}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Export CSS Modal */}
       {showExportModal && (
@@ -1791,27 +2366,35 @@ const hueToRgb = (hue: number): {r: number, g: number, b: number} => {
 
 // Convert RGB to hue
 const rgbToHue = (r: number, g: number, b: number): number => {
-  r /= 255;
-  g /= 255;
-  b /= 255;
+  // Convert RGB to [0,1] range if in [0,255] range
+  if (r > 1 || g > 1 || b > 1) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+  }
   
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   
-  if (max === min) return 0;
+  if (max === 0) return 0;
   
-  let h = 0;
-  const d = max - min;
+  const delta = max - min;
+  if (delta === 0) return 0; // grayscale
+  
+  let hue = 0;
   
   if (max === r) {
-    h = (g - b) / d + (g < b ? 6 : 0);
+    hue = ((g - b) / delta) % 6;
   } else if (max === g) {
-    h = (b - r) / d + 2;
+    hue = (b - r) / delta + 2;
   } else {
-    h = (r - g) / d + 4;
+    hue = (r - g) / delta + 4;
   }
   
-  return h * 60;
+  hue *= 60;
+  if (hue < 0) hue += 360;
+  
+  return hue;
 };
 
 // Get saturation from RGB (0-1)

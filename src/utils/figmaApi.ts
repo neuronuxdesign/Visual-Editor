@@ -51,10 +51,15 @@ export const getLocalVariables = async (fileId: string) => {
 };
 
 // Define a type for the variables data
-interface FigmaVariablePayload {
+export interface FigmaVariablePayload {
   variableIds?: string[];
-  variables?: Record<string, unknown>;
+  variables?: Record<string, unknown> | Array<Record<string, unknown>>;
   variableCollections?: Record<string, unknown>;
+  variableModeValues?: Array<{
+    variableId: string;
+    modeId: string;
+    value: unknown;
+  }>;
 }
 
 /**
