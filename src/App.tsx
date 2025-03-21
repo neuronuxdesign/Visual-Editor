@@ -7,11 +7,13 @@ import figmaConfig from './utils/figmaConfig'
 function App() {
   const [currentPage, setCurrentPage] = useState<'editor' | 'figmaTest'>('editor');
   const [figmaFileId, setFigmaFileId] = useState('');
+  const [themeFigmaFileId, setThemeFigmaFileId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Initialize with the stored Figma file ID
+    // Initialize with the stored Figma file IDs
     setFigmaFileId(figmaConfig.getStoredFigmaFileId());
+    setThemeFigmaFileId(figmaConfig.getStoredThemeFigmaFileId());
   }, []);
 
   const handleSetFigmaFileId = () => {
@@ -19,6 +21,11 @@ function App() {
     
     setIsSubmitting(true);
     figmaConfig.storeFigmaFileId(figmaFileId.trim());
+    
+    // Store theme file ID if provided
+    if (themeFigmaFileId.trim()) {
+      figmaConfig.storeThemeFigmaFileId(themeFigmaFileId.trim());
+    }
     
     // Show a brief visual feedback
     setTimeout(() => {
@@ -45,12 +52,21 @@ function App() {
         </div>
         <div className="file-id-control">
           <label>
-            Default Figma File ID:
+            Mapped Figma File ID:
             <input 
               type="text" 
               value={figmaFileId} 
               onChange={(e) => setFigmaFileId(e.target.value)}
-              placeholder="Enter Figma File ID"
+              placeholder="Enter Mapped Figma File ID"
+            />
+          </label>
+          <label>
+            Theme Figma File ID:
+            <input 
+              type="text" 
+              value={themeFigmaFileId} 
+              onChange={(e) => setThemeFigmaFileId(e.target.value)}
+              placeholder="Enter Theme Figma File ID"
             />
           </label>
           <button 

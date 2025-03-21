@@ -14,6 +14,7 @@ export const PROJECT_FIGMA_FILES = {
 // Local storage keys
 export const STORAGE_KEYS = {
   FIGMA_FILE_ID: 'figma-file-id',
+  THEME_FIGMA_FILE_ID: 'theme-figma-file-id',
   LAST_USED_PROJECT: 'last-used-project',
 };
 
@@ -32,6 +33,20 @@ export const storeFigmaFileId = (fileId: string): void => {
 };
 
 /**
+ * Get the stored Theme Figma file ID from localStorage
+ */
+export const getStoredThemeFigmaFileId = (): string => {
+  return localStorage.getItem(STORAGE_KEYS.THEME_FIGMA_FILE_ID) || '';
+};
+
+/**
+ * Store a Theme Figma file ID in localStorage
+ */
+export const storeThemeFigmaFileId = (fileId: string): void => {
+  localStorage.setItem(STORAGE_KEYS.THEME_FIGMA_FILE_ID, fileId);
+};
+
+/**
  * Get Figma file ID for a specific project
  */
 export const getFigmaFileIdForProject = (projectKey: string): string => {
@@ -44,5 +59,7 @@ export default {
   STORAGE_KEYS,
   getStoredFigmaFileId,
   storeFigmaFileId,
+  getStoredThemeFigmaFileId,
+  storeThemeFigmaFileId,
   getFigmaFileIdForProject,
 }; 

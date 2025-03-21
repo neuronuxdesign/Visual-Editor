@@ -1,0 +1,51 @@
+.new-variable-row {
+  background-color: #f7f9fc;
+  border-left: 3px solid #0066ff;
+}
+
+.create-variable-btn {
+  margin: 1rem 0;
+}
+
+.variable-name-input {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.variable-type-select {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.variable-value-input {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.save-variable-btn {
+  padding: 6px 12px;
+  background-color: #0066ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+.cancel-variable-btn {
+  padding: 6px 12px;
+  background-color: #f0f0f0;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.new-variable-value-container {
+  width: 100%;
+} 
