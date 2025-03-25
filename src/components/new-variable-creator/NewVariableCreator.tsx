@@ -2,81 +2,14 @@ import React, { useState, useEffect } from 'react';
 import './NewVariableCreator.scss';
 import ColorSelector from '../color-selector/ColorSelector';
 
-interface RGBAValue {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
-
-interface FigmaVariableCollection {
-  defaultModeId: string;
-  id: string;
-  name: string;
-  remote: boolean;
-  modes: Array<{
-    modeId: string;
-    name: string;
-  }>;
-  key: string;
-  hiddenFromPublishing: boolean;
-  variableIds: string[];
-}
-
-interface FigmaVariable {
-  id: string;
-  name: string;
-  remote: boolean;
-  key: string;
-  variableCollectionId: string;
-  resolvedType: string;
-  description: string;
-  hiddenFromPublishing: boolean;
-  valuesByMode: Record<string, unknown>;
-  scopes: string[];
-  codeSyntax?: Record<string, unknown>;
-}
-
-interface FigmaVariablesData {
-  status: number;
-  error: boolean;
-  meta: {
-    variableCollections: Record<string, FigmaVariableCollection>;
-    variables: Record<string, FigmaVariable>;
-  };
-}
-
-interface Variable {
-  id?: string;
-  name: string;
-  value: string;
-  rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
-  modeId: string;
-  collectionName: string;
-  isColor: boolean;
-  valueType: string;
-  referencedVariable?: {
-    id: string;
-    collection: string;
-    name: string;
-    finalValue: unknown;
-    finalValueType: string;
-  };
-  description?: string;
-}
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-interface TreeNode {
-  id: string;
-  name: string;
-  type: 'file' | 'folder';
-  children?: TreeNode[];
-  isExpanded?: boolean;
-}
+// Import types from the central types file
+import { 
+  RGBAValue, 
+  Variable, 
+  SelectOption, 
+  TreeNode, 
+  FigmaVariablesData 
+} from '../../pages/VisualEditor/types';
 
 interface NewVariableCreatorProps {
   selectedNodeId: string | null;
@@ -221,7 +154,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
     }
   };
 
-  const handleUpdateNewVariableValue = (value: string, modeId?: string, isReference = false, refVariable?: Variable) => {
+  const handleUpdateNewVariableValue = (value: string | RGBAValue, modeId?: string, isReference = false, refVariable?: Variable) => {
     if (newVariable) {
       // Determine which mode we're updating
       const targetModeId = modeId || newVariable.modeId;
@@ -255,8 +188,71 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
           };
         }
       }
+      // DIRECT RGBA OBJECT: Handle when we receive an RGBA object directly from ColorSelector
+      else if (typeof value === 'object' && value !== null && 'r' in value && 'g' in value && 'b' in value && 'a' in value) {
+        const rgbaValue = value as RGBAValue;
+        
+        // Format the display value string (still needed for the UI)
+        const displayValue = `${Math.round(rgbaValue.r)}, ${Math.round(rgbaValue.g)}, ${Math.round(rgbaValue.b)}`;
+        
+        console.log('[DEBUG] Received direct RGBA object in NewVariableCreator:', {
+          r: rgbaValue.r,
+          g: rgbaValue.g, 
+          b: rgbaValue.b,
+          a: rgbaValue.a,
+          targetModeId
+        });
+        
+        // Update mode-specific values with the complete RGBA object
+        setNewVariableModeValues(prev => {
+          // Check if we already have a value for this mode
+          const existingValue = prev[targetModeId];
+          
+          // If it's an RGBA object with same RGB values, just update alpha
+          if (existingValue && 
+              typeof existingValue === 'object' && 
+              'r' in existingValue && 
+              'g' in existingValue && 
+              'b' in existingValue && 
+              'a' in existingValue &&
+              (existingValue as RGBAValue).r === rgbaValue.r && 
+              (existingValue as RGBAValue).g === rgbaValue.g && 
+              (existingValue as RGBAValue).b === rgbaValue.b) {
+            
+            console.log('[DEBUG] Updating alpha for existing mode value:', {
+              oldAlpha: (existingValue as RGBAValue).a,
+              newAlpha: rgbaValue.a,
+              modeId: targetModeId
+            });
+            
+            // Create a new object to ensure React detects the change
+            return {
+              ...prev,
+              [targetModeId]: {
+                ...(existingValue as RGBAValue),
+                a: rgbaValue.a
+              }
+            };
+          }
+          
+          // Otherwise, use the new value
+          return {
+            ...prev,
+            [targetModeId]: rgbaValue
+          };
+        });
+        
+        // If we're editing the current active mode, update the main variable
+        if (targetModeId === newVariable.modeId) {
+          updatedVariable = {
+            ...newVariable,
+            value: displayValue, // String for display only
+            rawValue: rgbaValue  // Keep the complete object with alpha
+          };
+        }
+      }
       // If the variable is a color, parse it differently
-      else if (newVariable.isColor) {
+      else if (newVariable.isColor && typeof value === 'string') {
         // Check if value is coming directly from a ColorSelector which might have alpha
         const existingAlpha = newVariable.rawValue && 
                               typeof newVariable.rawValue === 'object' && 
@@ -278,6 +274,12 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
             b: b, 
             a: existingAlpha
           };
+          
+          console.log('[DEBUG] Storing RGB color with alpha in mode values:', {
+            r, g, b, a: existingAlpha,
+            targetModeId,
+            existingAlpha
+          });
           
           // Update mode-specific values
           setNewVariableModeValues(prev => ({
@@ -313,7 +315,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
         if (targetModeId === newVariable.modeId) {
           updatedVariable = {
             ...newVariable,
-            value: value,
+            value: typeof value === 'string' ? value : JSON.stringify(value),
             rawValue: value
           };
         }
@@ -437,22 +439,78 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
               !isObjectWithType(modeValue)) {
             // It's a color value object, format it for Figma
             modeValue = formatColorForFigma(modeValue);
+            
+            // Debug logging to verify alpha is preserved
+            if (typeof modeValue === 'object' && 'a' in modeValue) {
+              console.log('[DEBUG] Color value after formatting for Figma:', {
+                modeId,
+                alpha: (modeValue as RGBAValue).a,
+                original: typeof newVariableModeValues[modeId] === 'object' && 
+                          newVariableModeValues[modeId] !== null && 
+                          'a' in newVariableModeValues[modeId] ? 
+                          (newVariableModeValues[modeId] as RGBAValue).a : 'not found'
+              });
+            }
           }
           
           valuesByMode[modeId] = modeValue;
         } else if (modeId === defaultModeId) {
           // For the default mode, use the main variable value if not explicitly set
-          const defaultValue = newVariable.isColor
+          let defaultValue = newVariable.isColor
             ? formatColorForFigma(newVariable.rawValue || newVariable.value)
             : newVariable.rawValue || '';
+          
+          // Ensure we preserve the alpha value for color variables
+          if (newVariable.isColor && 
+              newVariable.rawValue && 
+              typeof newVariable.rawValue === 'object' && 
+              'a' in newVariable.rawValue &&
+              typeof defaultValue === 'object' && 
+              'a' in defaultValue) {
+              
+            // Create a new object to avoid mutating the original returned by formatColorForFigma
+            const alpha = (newVariable.rawValue as RGBAValue).a;
+            defaultValue = {
+              ...(defaultValue as RGBAValue),
+              a: alpha
+            };
+            
+            console.log('[DEBUG] Preserving alpha in default mode value:', {
+              modeId,
+              alpha,
+              resultValue: defaultValue
+            });
+          }
           
           valuesByMode[modeId] = defaultValue;
         } else if (isSelectedMode) {
           // For selected modes that don't have a specific value yet,
           // use the default value to ensure they're included in the new variable
-          const defaultValue = newVariable.isColor
+          let defaultValue = newVariable.isColor
             ? formatColorForFigma(newVariable.rawValue || newVariable.value)
             : newVariable.rawValue || '';
+            
+          // Ensure we preserve the alpha value for color variables
+          if (newVariable.isColor && 
+              newVariable.rawValue && 
+              typeof newVariable.rawValue === 'object' && 
+              'a' in newVariable.rawValue &&
+              typeof defaultValue === 'object' && 
+              'a' in defaultValue) {
+              
+            // Create a new object to avoid mutating the original returned by formatColorForFigma
+            const alpha = (newVariable.rawValue as RGBAValue).a;
+            defaultValue = {
+              ...(defaultValue as RGBAValue),
+              a: alpha
+            };
+            
+            console.log('[DEBUG] Preserving alpha in selected mode value:', {
+              modeId,
+              alpha,
+              resultValue: defaultValue
+            });
+          }
             
           valuesByMode[modeId] = defaultValue;
         }

@@ -2,93 +2,9 @@ import React, { useState } from 'react';
 import figmaApi from '../../utils/figmaApi';
 import figmaConfig from '../../utils/figmaConfig';
 
-// Interface for the Variable type
-interface Variable {
-  id?: string;
-  name: string;
-  value: string;
-  rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
-  modeId: string;
-  collectionName: string;
-  isColor: boolean;
-  valueType: string;
-  referencedVariable?: {
-    id: string;
-    collection: string;
-    name: string;
-    finalValue: unknown;
-    finalValueType: string;
-  };
-  description?: string;
-}
-
-// Interface for RGBA values
-interface RGBAValue {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
-
-// Interface for API errors
-interface ApiError {
-  response?: {
-    status: number;
-    data?: {
-      message?: string;
-    };
-  };
-  message: string;
-}
-
-// Interface for FigmaData
-interface FigmaVariableCollection {
-  defaultModeId: string;
-  id: string;
-  name: string;
-  remote: boolean;
-  modes: Array<{
-    modeId: string;
-    name: string;
-  }>;
-  key: string;
-  hiddenFromPublishing: boolean;
-  variableIds: string[];
-}
-
-interface FigmaVariable {
-  id: string;
-  name: string;
-  remote: boolean;
-  key: string;
-  variableCollectionId: string;
-  resolvedType: string;
-  description: string;
-  hiddenFromPublishing: boolean;
-  valuesByMode: Record<string, unknown>;
-  scopes: string[];
-  codeSyntax?: Record<string, unknown>;
-}
-
-interface FigmaVariablesData {
-  status: number;
-  error: boolean;
-  meta: {
-    variableCollections: Record<string, FigmaVariableCollection>;
-    variables: Record<string, FigmaVariable>;
-  };
-}
-
-interface RemoveVariableProps {
-  variable: Variable;
-  figmaData: FigmaVariablesData;
-  editingVariables: Record<string, boolean>;
-  setEditingVariables: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  setLoadingMessage: React.Dispatch<React.SetStateAction<string>>;
-  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
-  onVariablesUpdated: (data: FigmaVariablesData) => void;
-}
+// Import types
+import { Variable } from '../../types/common';
+import { ApiError, RemoveVariableProps } from './types';
 
 const RemoveVariable: React.FC<RemoveVariableProps> = ({
   variable,

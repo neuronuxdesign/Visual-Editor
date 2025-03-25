@@ -1,43 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './VariableDropdown.scss';
 
-// Interface for RGBA values
-interface RGBAValue {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
-
-// Interface for the Variable type
-interface Variable {
-  id?: string;
-  name: string;
-  value: string;
-  rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
-  modeId: string;
-  collectionName: string;
-  isColor: boolean;
-  valueType: string;
-  referencedVariable?: {
-    id: string;
-    collection: string;
-    name: string;
-    finalValue: unknown;
-    finalValueType: string;
-  };
-  description?: string;
-}
-
-// Interface for dropdown options
-interface VariableOption {
-  label: string;
-  value: string;
-  original: Variable | null;
-  isCustom?: boolean;
-  type: string;
-  color?: RGBAValue;
-}
+// Import types
+import { Variable, RGBAValue } from '../../types/common';
+import { VariableOption, VariableDropdownProps } from './types';
 
 // Helper function to find a variable by its value
 const findVariableByValue = (
@@ -50,14 +16,6 @@ const findVariableByValue = (
     v.value === value
   );
 };
-
-interface VariableDropdownProps {
-  variable: Variable;
-  allVariables: Variable[];
-  onValueChange: (variable: Variable, newValue: string, isReference?: boolean, refVariable?: Variable) => void;
-  valueOnly?: boolean;
-  onSave?: (variable: Variable) => void;
-}
 
 const VariableDropdown: React.FC<VariableDropdownProps> = ({ 
   variable, 

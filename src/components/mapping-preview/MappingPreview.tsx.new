@@ -5,12 +5,6 @@ import './MappingPreview.scss';
 import { RGBAValue, Variable } from '../../types/common';
 import { MappingPreviewProps } from './types';
 
-// Import types from the central types file
-import { 
-  FigmaVariablesData, 
-  SelectOption 
-} from '../../pages/VisualEditor/types';
-
 const MappingPreview: React.FC<MappingPreviewProps> = ({ 
   allVariables 
 }) => {

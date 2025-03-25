@@ -440,7 +440,7 @@ function VisualEditor() {
   };
 
   // Enhanced variable value change handler for dropdown
-  const handleVariableValueChange = (variable: Variable, newValue: string, isReference = false, refVariable?: Variable) => {
+  const handleVariableValueChange = (variable: Variable, newValue: string | RGBAValue, isReference = false, refVariable?: Variable) => {
     // Find the index of the variable to update - need to check if variable has an id
     const index = variable.id
       ? variables.findIndex(v => v.id === variable.id && v.modeId === variable.modeId)
@@ -453,6 +453,8 @@ function VisualEditor() {
     
     console.log(`[DEBUG] handleVariableValueChange for ${variable.name}:`, {
       value: newValue,
+      valueType: typeof newValue,
+      isRGBAObject: typeof newValue === 'object' && newValue !== null && 'r' in newValue && 'g' in newValue && 'b' in newValue && 'a' in newValue,
       foundInVariables: index !== -1,
       foundInAllVariables: isInAllVariables,
       variablesLength: variables.length,
@@ -508,7 +510,79 @@ function VisualEditor() {
           referenceType: refVariable.valueType
         };
       }
-    } else {
+    } 
+    // DIRECT RGBA OBJECT: Handle when we receive an RGBA object directly
+    else if (variable.isColor && 
+             typeof newValue === 'object' && 
+             newValue !== null && 
+             'r' in newValue && 
+             'g' in newValue && 
+             'b' in newValue && 
+             'a' in newValue) {
+      
+      const rgbaValue = newValue as RGBAValue;
+      
+      // If the updatedVariable already has a rawValue with the same RGB values, 
+      // it means ColorSelector already set it, just ensure alpha is correct
+      if (updatedVariable.rawValue && 
+          typeof updatedVariable.rawValue === 'object' && 
+          'r' in updatedVariable.rawValue && 
+          'g' in updatedVariable.rawValue && 
+          'b' in updatedVariable.rawValue) {
+          
+          // Check if we have the same RGB values (likely came from ColorSelector)
+          const existingRawValue = updatedVariable.rawValue as RGBAValue;
+          if (existingRawValue.r === rgbaValue.r && 
+              existingRawValue.g === rgbaValue.g && 
+              existingRawValue.b === rgbaValue.b) {
+              
+              // Keep RGB values, ensure alpha is from the passed RGBA object
+              existingRawValue.a = rgbaValue.a;
+              
+              console.log('[DEBUG] Preserved existing rawValue but updated alpha:', {
+                alpha: rgbaValue.a,
+                r: existingRawValue.r,
+                g: existingRawValue.g,
+                b: existingRawValue.b,
+                variable: variable.name
+              });
+              
+              // No need to replace the entire object since we just updated the alpha
+              // and updateVariable.rawValue already references existingRawValue
+          } else {
+              // Different RGB values, replace the entire object
+              updatedVariable.rawValue = { 
+                r: rgbaValue.r,
+                g: rgbaValue.g, 
+                b: rgbaValue.b, 
+                a: rgbaValue.a 
+              };
+          }
+      } else {
+          // No existing rawValue, create a new one
+          updatedVariable.rawValue = { 
+            r: rgbaValue.r,
+            g: rgbaValue.g, 
+            b: rgbaValue.b, 
+            a: rgbaValue.a 
+          };
+      }
+      
+      // Update the display value for UI purposes only
+      updatedVariable.value = `${Math.round(rgbaValue.r)}, ${Math.round(rgbaValue.g)}, ${Math.round(rgbaValue.b)}`;
+      
+      console.log('[DEBUG] Using direct RGBA object with alpha:', {
+        r: rgbaValue.r,
+        g: rgbaValue.g,
+        b: rgbaValue.b,
+        a: rgbaValue.a,
+        variableName: variable.name
+      });
+      
+      // Clear any reference data
+      delete updatedVariable.referencedVariable;
+    }
+    else {
       // IMPORTANT CHECK: If a variable with rawValue is passed directly, use its rawValue
       // This handles the case when ColorSelector passes the entire variable with updated alpha
       if (variable.isColor && 
@@ -541,7 +615,7 @@ function VisualEditor() {
         updatedVariable.value = `${Math.round(rgba.r)}, ${Math.round(rgba.g)}, ${Math.round(rgba.b)}`;
       }
       // Handle direct value update (not a reference)
-      else {
+      else if (typeof newValue === 'string') {
         updatedVariable.value = newValue;
 
         // For colors, we need to parse the r,g,b values
@@ -558,6 +632,9 @@ function VisualEditor() {
             b = isNaN(parts[2]) ? 0 : parts[2];
             if (parts.length > 3) {
               a = isNaN(parts[3]) ? 1 : parts[3];
+            } else if (variable.rawValue && typeof variable.rawValue === 'object' && 'a' in variable.rawValue) {
+              // Preserve the existing alpha value if not explicitly provided
+              a = (variable.rawValue as RGBAValue).a;
             }
           } else if (sanitizedValue.startsWith('rgb')) {
             // Format: "rgb(r,g,b)" or "rgba(r,g,b,a)"
@@ -568,6 +645,9 @@ function VisualEditor() {
               b = parseInt(rgbMatch[3], 10);
               if (rgbMatch[4]) {
                 a = parseFloat(rgbMatch[4]);
+              } else if (variable.rawValue && typeof variable.rawValue === 'object' && 'a' in variable.rawValue) {
+                // Preserve the existing alpha value if not explicitly provided
+                a = (variable.rawValue as RGBAValue).a;
               }
             }
           }
@@ -586,9 +666,25 @@ function VisualEditor() {
             b: b, 
             a: a 
           };
+ 
+          console.log('[DEBUG] Storing color with alpha:', {
+            variableName: updatedVariable.name,
+            rawValue: updatedVariable.rawValue,
+            r: r,
+            g: g,
+            b: b,
+            a: a
+          });
 
           // Update the display value for consistency
           updatedVariable.value = `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
+          
+          console.log('[DEBUG] Alpha value for color variable:', {
+            variableName: variable.name,
+            alpha: a,
+            preservedFrom: sanitizedValue.includes(',') && sanitizedValue.split(',').length > 3 ? 'comma input' : 
+                           sanitizedValue.startsWith('rgba') ? 'rgba input' : 'existing rawValue'
+          });
         } else {
           // For other types, we need to convert the value appropriately
           switch (variable.valueType) {

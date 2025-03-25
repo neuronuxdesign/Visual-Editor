@@ -5,13 +5,13 @@ import './VariableDetails.scss';
 import ColorSelector from '../color-selector/ColorSelector';
 
 // Import Variable type that's used
-import { Variable } from '../../pages/VisualEditor/types';
+import { Variable, RGBAValue } from '../../pages/VisualEditor/types';
 
 interface VariableDetailsProps {
   variableData: Variable;
   editingVariables: Record<string, boolean>;
   setEditingVariables: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  handleVariableValueChange: (variable: Variable, newValue: string, isReference?: boolean, refVariable?: Variable) => void;
+  handleVariableValueChange: (variable: Variable, newValue: string | RGBAValue, isReference?: boolean, refVariable?: Variable) => void;
   handleSaveVariable: (variable: Variable) => Promise<void>;
   allVariables: Variable[];
 }

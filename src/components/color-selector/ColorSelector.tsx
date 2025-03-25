@@ -1,33 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import './ColorSelector.scss';
 
-// Interface for RGBA values
-interface RGBAValue {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
-
-// Interface for the Variable type
-interface Variable {
-  id?: string;
-  name: string;
-  value: string;
-  rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
-  modeId: string;
-  collectionName: string;
-  isColor: boolean;
-  valueType: string;
-  referencedVariable?: {
-    id: string;
-    collection: string;
-    name: string;
-    finalValue: unknown;
-    finalValueType: string;
-  };
-  description?: string;
-}
+// Import types from the central types file
+import { RGBAValue, Variable } from '../../pages/VisualEditor/types';
 
 // Interface for dropdown options
 interface VariableOption {
@@ -54,7 +29,7 @@ const findVariableByValue = (
 interface ColorSelectorProps {
   variable: Variable;
   allVariables: Variable[];
-  onValueChange: (variable: Variable, newValue: string, isReference?: boolean, refVariable?: Variable) => void;
+  onValueChange: (variable: Variable, newValue: string | RGBAValue, isReference?: boolean, refVariable?: Variable) => void;
   valueOnly?: boolean;
 }
 
@@ -218,12 +193,27 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
         a: customAlpha
       };
       
+      console.log('[DEBUG] ColorSelector creating RGB value with alpha:', {
+        r, g, b, a: customAlpha,
+        variableName: variable.name,
+        modeId: variable.modeId
+      });
+      
       // Update the variable with both the RGB value string and the rawValue with alpha
       updatedVariable.value = `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
       updatedVariable.rawValue = rgbaValue;
       
       // Pass the updated variable to the parent component
-      onValueChange(updatedVariable, updatedVariable.value);
+      // IMPORTANT: Pass the RGBA object directly instead of passing updatedVariable.value
+      // This ensures the alpha channel is properly preserved
+      onValueChange(updatedVariable, rgbaValue);
+
+      console.log('[DEBUG] Calling onValueChange with rgbaValue:', {
+        rgbaValue,
+        alpha: rgbaValue.a,
+        updatedVariableRawValue: updatedVariable.rawValue,
+        updatedVariableRawValueAlpha: (updatedVariable.rawValue as RGBAValue).a
+      });
     }
     
     // Close the dropdown after applying the value

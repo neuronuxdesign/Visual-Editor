@@ -1,5 +1,4 @@
-import { FigmaVariable, FigmaVariableCollection } from '../../types/figma';
-import { Variable } from '../../types/variables';
+import { FigmaVariable, FigmaVariableCollection, Variable } from '../../pages/VisualEditor/types';
 
 /**
  * Convert Figma variables into a more accessible format for the UI
