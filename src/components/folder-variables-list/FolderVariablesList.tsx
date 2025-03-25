@@ -1,14 +1,12 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import Select from 'react-select';
 import RemoveVariable from '../remove-variable/RemoveVariable';
-import ColorSelector from '../color-selector';
-import VariableDropdown from '../variable-dropdown';
+import ColorSelector from '../color-selector/ColorSelector';
+import VariableDropdown from '../variable-dropdown/VariableDropdown';
 import NewVariableCreator from '../new-variable-creator/NewVariableCreator';
-import { resolveVariableChain } from '../../utils/variableUtils';
 import './FolderVariablesList.scss';
-
-// Import types from a new types file
-import { TreeNode, Variable, FigmaVariablesData, SelectOption, RGBAValue } from '../../types';
+import { Variable, RGBAValue, FigmaVariablesData } from '../../pages/VisualEditor/types';
+import { TreeNode, SelectOption } from '../../pages/VisualEditor/types';
 
 interface FolderVariablesListProps {
   selectedNode: TreeNode;
@@ -38,6 +36,21 @@ interface FolderVariablesListProps {
   processVariableData: (data: FigmaVariablesData) => void;
 }
 
+// Helper function to resolve a variable reference chain
+const resolveVariableChain = (variableId: string, variables: Variable[]): Variable | null => {
+  const variable = variables.find(v => v.id === variableId);
+  if (!variable) return null;
+
+  // If the variable references another variable, follow the chain
+  if (variable.referencedVariable && variable.referencedVariable.id) {
+    const referencedVariable = resolveVariableChain(variable.referencedVariable.id, variables);
+    if (referencedVariable) return referencedVariable;
+  }
+
+  // Otherwise, return the variable itself
+  return variable;
+};
+
 const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
   selectedNode,
   treeData,
@@ -65,8 +78,11 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
   handleSelectNode,
   processVariableData
 }) => {
+  // Generate unique IDs for this component instance
+  const uniqueId = useId();
+
   // Find all direct child variables
-  let directChildVariables = variables.filter(v => 
+  const directChildVariables = variables.filter(v => 
     selectedNode.children?.some(child => child.id === v.id)
   );
   
@@ -97,11 +113,6 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
       childIds.includes(v.id || '')
     );
     
-    // Create a map of variable IDs that are directly in the folder
-    const directChildIds = new Set(
-      directChildVariables.map(v => v.id)
-    );
-    
     // For the final folderVariables list:
     // 1. First, include all direct children
     // 2. Then, add nested variables whose IDs aren't already in the direct children
@@ -129,6 +140,18 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
     folderVariables = directChildVariables;
   }
 
+  // Add state to track if we're creating a new variable
+  const [isCreatingVariable, setIsCreatingVariable] = useState(false);
+  // Add ref for scrolling to the new variable row
+  const newVariableRowRef = useRef<HTMLDivElement>(null);
+  
+  // Effect to scroll to the new variable row when it appears
+  useEffect(() => {
+    if (isCreatingVariable && newVariableRowRef.current) {
+      newVariableRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isCreatingVariable]);
+
   return (
     <div className="folder-contents">
       <h2>{selectedNode.name}</h2>
@@ -137,24 +160,13 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
       </p>
 
       <div className="variables-table-header">
-        <NewVariableCreator
-          selectedNodeId={selectedNodeId}
-          treeData={treeData}
-          allVariables={allVariables}
-          selectedBrand={selectedBrand}
-          selectedGrade={selectedGrade}
-          selectedDevice={selectedDevice}
-          selectedThemes={selectedThemes}
-          modeMapping={modeMapping}
-          selectedModes={selectedModes}
-          availableModes={availableModes}
-          figmaData={figmaData}
-          formatColorForFigma={formatColorForFigma}
-          onVariablesUpdated={processVariableData}
-          setIsLoading={setIsLoading}
-          setLoadingMessage={setLoadingMessage}
-          setErrorMessage={setErrorMessage}
-        />
+        {/* Move button here but keep NewVariableCreator component for the table */}
+        <button 
+          className="action-button create-variable-btn"
+          onClick={() => setIsCreatingVariable(true)}
+        >
+          Create Variable
+        </button>
 
         {/* Mode selector */}
         {availableModes.length > 0 && (
@@ -207,10 +219,12 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
 
             return (
               <div
-                key={mode.modeId}
+                key={`${mode.modeId}-${uniqueId}`}
                 className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
               >
-                {mode.name} {isDefaultMode && <span className="mode-indicator">★</span>}
+                <span>
+                  {mode.name} {isDefaultMode && <sup className="mode-indicator">★</sup>}
+                </span>
               </div>
             );
           })}
@@ -227,27 +241,12 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
 
           return (
             <div
-              key={`${variable.id}-row-${modeValuesHash}`}
+              key={`${variable.id}-row-${modeValuesHash}-${uniqueId}`}
               className="variables-row"
             >
               {/* Variable info cell - same for all modes */}
               <div className="variable-cell variable-info-cell">
                 <div className="variable-info-content">
-                  {variable.isColor && (
-                    <div
-                      className="color-preview"
-                      key={`color-preview-${variable.id}-${variable.value}-${Date.now()}`}
-                      style={{
-                        backgroundColor: variable.referencedVariable && variable.referencedVariable.finalValueType === 'color'
-                          ? `rgba(${variable.value || '0, 0, 0'}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`
-                          : `rgba(${variable.value || '0, 0, 0'}, ${(variable.rawValue as RGBAValue)?.a || 1})`,
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '4px',
-                        border: '1px solid #ddd'
-                      }}
-                    />
-                  )}
                   <div className="variable-name">{variable.name || ''}</div>
                 </div>
               </div>
@@ -264,7 +263,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
 
                 return (
                   <div
-                    key={`${variable.id}-${mode.modeId}`}
+                    key={`${variable.id}-${mode.modeId}-${uniqueId}`}
                     className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
                   >
                     {modeVariable ? (
@@ -345,7 +344,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                           allVariables={allVariables}
                                           onValueChange={handleVariableValueChange}
                                           valueOnly={false}
-                                          key={`${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}`}
+                                          key={`folder-list-ref-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
                                         />
                                       ) : (
                                         <VariableDropdown
@@ -354,7 +353,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                           onValueChange={handleVariableValueChange}
                                           valueOnly={false}
                                           onSave={handleSaveVariable}
-                                          key={`${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}`}
+                                          key={`folder-list-dropdown-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
                                         />
                                       )}
                                     </div>
@@ -389,7 +388,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                         display: 'inline-block',
                                         verticalAlign: 'middle'
                                       }}
-                                      key={`color-preview-${modeVariable.id}-${modeVariable.modeId}-${r}-${g}-${b}`}
+                                      key={`color-preview-${modeVariable.id}-${modeVariable.modeId}-${r}-${g}-${b}-${uniqueId}`}
                                     />
                                   );
                                 }
@@ -401,7 +400,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                             })()}
 
                             {/* Show the variable value */}
-                            <span key={`value-${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}`}>
+                            <span key={`value-${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}-${uniqueId}`}>
                               {modeVariable.value}
                             </span>
 
@@ -429,7 +428,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                     allVariables={allVariables}
                                     onValueChange={handleVariableValueChange}
                                     valueOnly={false}
-                                    key={`${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}`}
+                                    key={`folder-list-ref-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
                                   />
                                 ) : (
                                   <VariableDropdown
@@ -438,7 +437,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                     onValueChange={handleVariableValueChange}
                                     valueOnly={false}
                                     onSave={handleSaveVariable}
-                                    key={`${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}`}
+                                    key={`folder-list-dropdown-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
                                   />
                                 )}
                                 <div className="mode-buttons">
@@ -509,6 +508,36 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
             </div>
           );
         })}
+        
+        {/* New variable row at the end of the table */}
+        {isCreatingVariable && (
+          <div ref={newVariableRowRef}>
+            <NewVariableCreator
+              selectedNodeId={selectedNodeId}
+              treeData={treeData}
+              allVariables={allVariables}
+              selectedBrand={selectedBrand}
+              selectedGrade={selectedGrade}
+              selectedDevice={selectedDevice}
+              selectedThemes={selectedThemes}
+              modeMapping={modeMapping}
+              selectedModes={selectedModes}
+              availableModes={availableModes}
+              figmaData={figmaData}
+              formatColorForFigma={formatColorForFigma}
+              onVariablesUpdated={(data) => {
+                processVariableData(data);
+                setIsCreatingVariable(false);
+              }}
+              setIsLoading={setIsLoading}
+              setLoadingMessage={setLoadingMessage}
+              setErrorMessage={setErrorMessage}
+              onCancel={() => setIsCreatingVariable(false)}
+              showRow={true}
+              hideButton={true}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

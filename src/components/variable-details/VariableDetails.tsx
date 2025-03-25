@@ -1,28 +1,31 @@
-import React from 'react';
+import React, { useId } from 'react';
 import './VariableDetails.scss';
 
-// Import types from a new types file
-import { Variable, RGBAValue } from '../../types';
+// Import ColorSelector component
+import ColorSelector from '../color-selector/ColorSelector';
+
+// Import Variable type that's used
+import { Variable } from '../../pages/VisualEditor/types';
 
 interface VariableDetailsProps {
   variableData: Variable;
   editingVariables: Record<string, boolean>;
   setEditingVariables: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  handleVariableValueChange: (variable: Variable, newValue: string) => void;
+  handleVariableValueChange: (variable: Variable, newValue: string, isReference?: boolean, refVariable?: Variable) => void;
   handleSaveVariable: (variable: Variable) => Promise<void>;
-  handleColorPickerOpen: (variableIndex: number, allVariables: Variable[]) => void;
   allVariables: Variable[];
 }
 
 const VariableDetails: React.FC<VariableDetailsProps> = ({
   variableData,
   editingVariables,
-  setEditingVariables,
   handleVariableValueChange,
   handleSaveVariable,
-  handleColorPickerOpen,
   allVariables
 }) => {
+  // Generate a unique ID for this component instance
+  const uniqueId = useId();
+  
   return (
     <div className="variable-editor">
       <h2>{variableData.name}</h2>
@@ -49,22 +52,12 @@ const VariableDetails: React.FC<VariableDetailsProps> = ({
           <div className="property-value">
             {variableData.isColor ? (
               <div className="color-editor">
-                <div
-                  className="color-preview"
-                  style={{
-                    backgroundColor: `rgba(${variableData.value}, ${(variableData.rawValue as RGBAValue).a})`,
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '4px',
-                    border: '1px solid #ddd'
-                  }}
-                  onClick={() => handleColorPickerOpen(allVariables.indexOf(variableData), allVariables)}
-                />
-                <input 
-                  type="text"
-                  value={variableData.value}
-                  onChange={(e) => handleVariableValueChange(variableData, e.target.value)}
-                  placeholder="RGB values"
+                <ColorSelector
+                  variable={variableData}
+                  allVariables={allVariables}
+                  onValueChange={handleVariableValueChange}
+                  valueOnly={false}
+                  key={`details-${uniqueId}-${variableData.id}-${variableData.modeId}`}
                 />
               </div>
             ) : (

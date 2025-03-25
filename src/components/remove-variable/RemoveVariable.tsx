@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import figmaApi from '../../../../utils/figmaApi';
-import figmaConfig from '../../../../utils/figmaConfig';
+import figmaApi from '../../utils/figmaApi';
+import figmaConfig from '../../utils/figmaConfig';
 
 // Interface for the Variable type
 interface Variable {

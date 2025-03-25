@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './NewVariableCreator.scss';
 import ColorSelector from '../color-selector/ColorSelector';
 
@@ -95,6 +95,9 @@ interface NewVariableCreatorProps {
   setIsLoading: (loading: boolean) => void;
   setLoadingMessage: (message: string) => void;
   setErrorMessage: (message: string | null) => void;
+  onCancel?: () => void;
+  showRow?: boolean;
+  hideButton?: boolean;
 }
 
 const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
@@ -113,10 +116,19 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
   onVariablesUpdated,
   setIsLoading,
   setLoadingMessage,
-  setErrorMessage
+  setErrorMessage,
+  onCancel,
+  showRow = false,
+  hideButton = false
 }) => {
   const [newVariable, setNewVariable] = useState<Variable | null>(null);
   const [newVariableModeValues, setNewVariableModeValues] = useState<{ [modeId: string]: unknown }>({});
+
+  useEffect(() => {
+    if (showRow && !newVariable && selectedNodeId) {
+      handleCreateVariable();
+    }
+  }, [showRow, newVariable, selectedNodeId]);
 
   // Helper function to check if a value is an RGBA color object
   const isRGBAColor = (value: unknown): value is RGBAValue => {
@@ -145,8 +157,10 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       const selectedNode = findNodeById(treeData, selectedNodeId);
 
       if (selectedNode && selectedNode.type === 'folder') {
-        // Generate a current mode identifier
+        // Generate a current mode identifier based on the three selected collection and variable group level
         const currentModeIdentifier = `${selectedBrand[0]?.value}-${selectedGrade.value}-${selectedDevice.value}-${selectedThemes[0]?.value}`;
+        
+        // Find all matching mode IDs for the current selection
         const matchingModeIds = Object.entries(modeMapping).filter(([, identifier]) => {
           return identifier === currentModeIdentifier;
         }).map(([modeId]) => modeId);
@@ -166,8 +180,17 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
           valueType: 'STRING'
         };
 
-        // Reset mode-specific values when creating a new variable
-        setNewVariableModeValues({});
+        // Initialize mode-specific values with empty values for all currently selected modes
+        // This ensures the new variable has the same count of active modes as those in the view
+        const initialModeValues: { [modeId: string]: unknown } = {};
+        
+        // For each selected mode, initialize an empty value
+        selectedModes.forEach(mode => {
+          initialModeValues[mode.modeId] = '';
+        });
+        
+        // Reset mode-specific values and set initial values for all selected modes
+        setNewVariableModeValues(initialModeValues);
         setNewVariable(newVar);
       }
     }
@@ -198,25 +221,63 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
     }
   };
 
-  const handleUpdateNewVariableValue = (value: string, modeId?: string) => {
+  const handleUpdateNewVariableValue = (value: string, modeId?: string, isReference = false, refVariable?: Variable) => {
     if (newVariable) {
       // Determine which mode we're updating
       const targetModeId = modeId || newVariable.modeId;
 
       let updatedVariable = { ...newVariable };
       
+      // If this is a reference to another variable
+      if (isReference && refVariable) {
+        // Store the referenced variable info
+        const refValue = refVariable.rawValue;
+        
+        // Update mode-specific values with the reference
+        setNewVariableModeValues(prev => ({
+          ...prev,
+          [targetModeId]: refValue
+        }));
+        
+        // If we're editing the current active mode, update the main variable
+        if (targetModeId === newVariable.modeId) {
+          updatedVariable = {
+            ...newVariable,
+            value: refVariable.value,
+            rawValue: refValue,
+            referencedVariable: {
+              id: refVariable.id || '',
+              collection: refVariable.collectionName,
+              name: refVariable.name,
+              finalValue: refValue,
+              finalValueType: refVariable.valueType
+            }
+          };
+        }
+      }
       // If the variable is a color, parse it differently
-      if (newVariable.isColor) {
+      else if (newVariable.isColor) {
+        // Check if value is coming directly from a ColorSelector which might have alpha
+        const existingAlpha = newVariable.rawValue && 
+                              typeof newVariable.rawValue === 'object' && 
+                              'a' in newVariable.rawValue ? 
+                              (newVariable.rawValue as RGBAValue).a : 1;
+        
         // Try to parse as RGB
         const rgbMatch = value.match(/^\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$/);
         
         if (rgbMatch) {
-          const r = parseInt(rgbMatch[1], 10) / 255;
-          const g = parseInt(rgbMatch[2], 10) / 255;
-          const b = parseInt(rgbMatch[3], 10) / 255;
+          const r = parseInt(rgbMatch[1], 10);
+          const g = parseInt(rgbMatch[2], 10);
+          const b = parseInt(rgbMatch[3], 10);
           
-          // Store the RGBA values
-          const colorValue = { r, g, b, a: 1 };
+          // Store the RGBA values - preserve existing alpha if available
+          const colorValue = { 
+            r: r, 
+            g: g, 
+            b: b, 
+            a: existingAlpha
+          };
           
           // Update mode-specific values
           setNewVariableModeValues(prev => ({
@@ -230,7 +291,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
             // Update the main variable
             updatedVariable = {
               ...newVariable,
-              value: `${r * 255}, ${g * 255}, ${b * 255}`,
+              value: `${r}, ${g}, ${b}`,
               rawValue: colorValue
             };
           }
@@ -274,7 +335,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       switch (type) {
         case 'COLOR':
           initialValue = '255, 255, 255';
-          rawValue = { r: 1, g: 1, b: 1, a: 1 };
+          rawValue = { r: 255, g: 255, b: 255, a: 1 }; // Store raw RGB in 0-255 range with alpha
           isColor = true;
           break;
         case 'NUMBER':
@@ -285,28 +346,44 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
           initialValue = 'false';
           rawValue = false;
           break;
-        default: // STRING and others
+        default:
           initialValue = '';
           rawValue = '';
+          break;
       }
       
-      // Update the variable with the new type
-      setNewVariable({
+      // Update the variable with the right initial value
+      const updatedVariable = {
         ...newVariable,
         valueType: type,
         isColor,
         value: initialValue,
         rawValue
+      };
+      
+      // Reset any references
+      delete updatedVariable.referencedVariable;
+      
+      setNewVariable(updatedVariable);
+      
+      // Also update for each mode
+      // Use the same approach for the mode values
+      const updatedModeValues = { ...newVariableModeValues };
+      Object.keys(updatedModeValues).forEach(modeId => {
+        updatedModeValues[modeId] = rawValue;
       });
       
-      // Reset mode-specific values when changing type
-      setNewVariableModeValues({});
+      setNewVariableModeValues(updatedModeValues);
     }
   };
 
   const handleCancelNewVariable = () => {
     setNewVariable(null);
     setNewVariableModeValues({});
+    
+    if (onCancel) {
+      onCancel();
+    }
   };
 
   const handleSaveNewVariable = async () => {
@@ -341,9 +418,13 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       // Get all modes from the collection
       const collectionModes = selectedCollection.modes || [];
       
+      // Ensure we include all selected modes (based on the three selected collection and variable group level)
       // For each mode in the collection
       for (const mode of collectionModes) {
         const { modeId } = mode;
+        
+        // Check if this mode is among the currently selected modes in the view
+        const isSelectedMode = selectedModes.some(selectedMode => selectedMode.modeId === modeId);
         
         if (newVariableModeValues[modeId] !== undefined) {
           // We have a specific value for this mode
@@ -366,8 +447,16 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
             : newVariable.rawValue || '';
           
           valuesByMode[modeId] = defaultValue;
+        } else if (isSelectedMode) {
+          // For selected modes that don't have a specific value yet,
+          // use the default value to ensure they're included in the new variable
+          const defaultValue = newVariable.isColor
+            ? formatColorForFigma(newVariable.rawValue || newVariable.value)
+            : newVariable.rawValue || '';
+            
+          valuesByMode[modeId] = defaultValue;
         }
-        // Other modes will be left undefined if not explicitly set
+        // Other modes will be left undefined if not explicitly set and not selected
       }
       
       // Prepare the payload for the Figma API
@@ -433,7 +522,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
 
   return (
     <>
-      {selectedNodeId && (
+      {selectedNodeId && !hideButton && (
         <button 
           className="action-button create-variable-btn"
           onClick={handleCreateVariable}
@@ -444,24 +533,9 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       
       {newVariable && (
         <div className="variables-row new-variable-row">
+          {/* First column - Variable info */}
           <div className="variable-cell variable-info-cell">
             <div className="variable-info-content">
-              {newVariable.isColor && (
-                <div
-                  className="color-preview"
-                  style={{
-                    backgroundColor: newVariable.referencedVariable && newVariable.referencedVariable.finalValueType === 'color'
-                      ? `rgba(${newVariable.value}, ${(newVariable.referencedVariable.finalValue as RGBAValue)?.a || 1})`
-                      : newVariable.value
-                        ? `rgba(${newVariable.value}, ${(newVariable.rawValue as RGBAValue)?.a || 1})`
-                        : `rgba(0, 0, 0, 1)`,
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '4px',
-                    border: '1px solid #ddd'
-                  }}
-                />
-              )}
               <div className="variable-name">
                 <input
                   type="text"
@@ -471,30 +545,33 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
                   className="variable-name-input"
                 />
               </div>
-              <div className="variable-type">
-                <select
-                  value={newVariable.valueType}
-                  onChange={(e) => handleChangeNewVariableType(e.target.value)}
-                  className="variable-type-select"
-                >
-                  <option value="STRING">STRING</option>
-                  <option value="COLOR">COLOR</option>
-                  <option value="NUMBER">NUMBER</option>
-                  <option value="BOOLEAN">BOOLEAN</option>
-                </select>
-              </div>
+            </div>
+            <div className="variable-type">
+              <select
+                value={newVariable.valueType}
+                onChange={(e) => handleChangeNewVariableType(e.target.value)}
+                className="variable-type-select"
+              >
+                <option value="STRING">STRING</option>
+                <option value="COLOR">COLOR</option>
+                <option value="NUMBER">NUMBER</option>
+                <option value="BOOLEAN">BOOLEAN</option>
+              </select>
             </div>
           </div>
 
-          {/* New variable value cells for each mode */}
+          {/* Mode value cells */}
           {selectedModes.map((mode, index) => {
             // Determine if this is the default mode
             const isDefaultMode = availableModes.length > 0 ? mode.modeId === availableModes[0].modeId : index === 0;
+            // Get the mode value if it exists
+            const modeValue = newVariableModeValues[mode.modeId];
+            const hasValue = modeValue !== undefined;
 
             return (
               <div
                 key={mode.modeId}
-                className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
+                className={`variable-cell variable-mode-value-cell ${isDefaultMode || hasValue ? 'active-mode' : ''}`}
               >
                 <div className="new-variable-value-container">
                   {newVariable.isColor ? (
@@ -516,8 +593,8 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
                           : newVariable
                       }
                       allVariables={allVariables}
-                      onValueChange={(variable, newValue) => {
-                        handleUpdateNewVariableValue(newValue, mode.modeId);
+                      onValueChange={(variable, newValue, isReference, refVariable) => {
+                        handleUpdateNewVariableValue(newValue, mode.modeId, isReference, refVariable);
                       }}
                       valueOnly={false}
                       key={`new-variable-${mode.modeId}`}
@@ -544,6 +621,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
             );
           })}
 
+          {/* Actions cell with Save/Cancel buttons */}
           <div className="variable-cell variable-actions-cell">
             <div className="variable-actions">
               <button

@@ -318,7 +318,6 @@ li .tree-view-list {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 24px;
 }
 
 .folder-contents {
@@ -414,18 +413,13 @@ li .tree-view-list {
   border: 1px solid var(--table-border);
   border-radius: 4px;
   margin-top: 16px;
-  overflow: hidden;
 }
 
 .variables-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 250px repeat(auto-fill, minmax(220px, 1fr)) 100px;
+  width: 100%;
   align-items: center;
-  min-height: 48px;
-  border-bottom: 1px solid var(--table-border);
-  
-  &:last-child {
-    border-bottom: none;
-  }
   
   &.variables-header {
     background-color: var(--table-header-bg);
@@ -451,7 +445,7 @@ li .tree-view-list {
   
   &.variable-name-cell {
     flex: 1;
-    min-width: 150px;
+    min-width: 250px;
   }
   
   &.variable-value-cell {
@@ -1346,11 +1340,10 @@ input[type="text"] {
 /* Multi-mode table styles */
 .multi-mode-table {
   width: 100%;
-  overflow-x: auto;
-  
+  §
   .variables-row {
     display: grid;
-    grid-template-columns: 280px repeat(auto-fill, minmax(220px, 1fr)) 100px;
+    grid-template-columns: 250px repeat(auto-fill, minmax(220px, 1fr)) 100px;
     width: 100%;
     align-items: center;
     
@@ -1375,16 +1368,17 @@ input[type="text"] {
   .variable-info-cell {
     position: sticky;
     left: 0;
-    background-color: #fff;
     z-index: 1;
+    width: 250px;
+    min-width: 250px;
     
     .variable-info-content {
       display: flex;
       align-items: center;
+      width: 100%;
       
       .color-preview {
-        margin-right: 10px;
-        flex-shrink: 0;
+        display: none; /* Hide color preview in the first column */
       }
       
       .variable-name, .variable-name-input {

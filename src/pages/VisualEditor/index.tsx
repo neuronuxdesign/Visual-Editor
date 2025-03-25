@@ -4,7 +4,7 @@ import './styles.scss'
 import figmaApi from '../../utils/figmaApi'
 import figmaConfig from '../../utils/figmaConfig'
 import NeuronLogo from '../../assets/Neuron.svg'
-import TreeView from './components/tree-view'
+import TreeView from '../../components/tree-view'
 
 // Import our types from the types file
 import { 
@@ -17,11 +17,11 @@ import {
 
 // Add the import for formatNonColorValue
 import { formatNonColorValue as utilFormatNonColorValue } from './utils/variableUtils'
-import MappingPreview from './components/mapping-preview/MappingPreview';
+import MappingPreview from '../../components/mapping-preview/MappingPreview';
 
 // Import our new components
-import FolderVariablesList from './components/folder-variables-list/FolderVariablesList';
-import VariableDetails from './components/variable-details/VariableDetails';
+import FolderVariablesList from '../../components/folder-variables-list/FolderVariablesList';
+import VariableDetails from '../../components/variable-details/VariableDetails';
 
 // Define options for selectors
 const brandOptions = [
@@ -442,7 +442,7 @@ function VisualEditor() {
   // Enhanced variable value change handler for dropdown
   const handleVariableValueChange = (variable: Variable, newValue: string, isReference = false, refVariable?: Variable) => {
     // Find the index of the variable to update - need to check if variable has an id
-    let index = variable.id
+    const index = variable.id
       ? variables.findIndex(v => v.id === variable.id && v.modeId === variable.modeId)
       : -1;
     
@@ -456,7 +456,16 @@ function VisualEditor() {
       foundInVariables: index !== -1,
       foundInAllVariables: isInAllVariables,
       variablesLength: variables.length,
-      allVariablesLength: allVariables.length
+      allVariablesLength: allVariables.length,
+      // Add current alpha value if it's a color
+      currentAlpha: variable.isColor && variable.rawValue && 
+                   typeof variable.rawValue === 'object' && 
+                   'a' in variable.rawValue ? 
+                   (variable.rawValue as RGBAValue).a : 'none',
+      // Show if rawValue is passed directly
+      hasRawValue: variable.rawValue ? 'yes' : 'no',
+      rawValueType: variable.rawValue ? typeof variable.rawValue : 'none',
+      entireVariable: JSON.stringify(variable)
     });
     
     if (index === -1 && !isInAllVariables) {
@@ -500,77 +509,115 @@ function VisualEditor() {
         };
       }
     } else {
+      // IMPORTANT CHECK: If a variable with rawValue is passed directly, use its rawValue
+      // This handles the case when ColorSelector passes the entire variable with updated alpha
+      if (variable.isColor && 
+          variable.rawValue && 
+          typeof variable.rawValue === 'object' && 
+          'r' in variable.rawValue &&
+          'g' in variable.rawValue &&
+          'b' in variable.rawValue &&
+          'a' in variable.rawValue) {
+          
+        // We received an entire variable with rawValue containing alpha
+        // Just update our variable copy with this raw value
+        const rgba = variable.rawValue as RGBAValue;
+        
+        updatedVariable.rawValue = { 
+          r: rgba.r,
+          g: rgba.g, 
+          b: rgba.b, 
+          a: rgba.a 
+        };
+        
+        console.log('[DEBUG] Using directly provided rgba in variable:', {
+          r: rgba.r,
+          g: rgba.g,
+          b: rgba.b,
+          a: rgba.a
+        });
+        
+        // Update the display value for consistency, but don't include alpha in the display
+        updatedVariable.value = `${Math.round(rgba.r)}, ${Math.round(rgba.g)}, ${Math.round(rgba.b)}`;
+      }
       // Handle direct value update (not a reference)
-      updatedVariable.value = newValue;
+      else {
+        updatedVariable.value = newValue;
 
-      // For colors, we need to parse the r,g,b values
-      if (variable.isColor) {
-        // Trim whitespace and handle different input formats
-        const sanitizedValue = newValue.trim().replace(/\s+/g, '');
-        let r = 0, g = 0, b = 0, a = 1;
+        // For colors, we need to parse the r,g,b values
+        if (variable.isColor) {
+          // Trim whitespace and handle different input formats
+          const sanitizedValue = newValue.trim().replace(/\s+/g, '');
+          let r = 0, g = 0, b = 0, a = 1;
 
-        if (sanitizedValue.includes(',')) {
-          // Format: "r, g, b"
-          const parts = sanitizedValue.split(',').map(num => parseFloat(num.trim()));
-          r = isNaN(parts[0]) ? 0 : parts[0];
-          g = isNaN(parts[1]) ? 0 : parts[1];
-          b = isNaN(parts[2]) ? 0 : parts[2];
-          if (parts.length > 3) {
-            a = isNaN(parts[3]) ? 1 : parts[3];
-          }
-        } else if (sanitizedValue.startsWith('rgb')) {
-          // Format: "rgb(r,g,b)" or "rgba(r,g,b,a)"
-          const rgbMatch = sanitizedValue.match(/rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)/);
-          if (rgbMatch) {
-            r = parseInt(rgbMatch[1], 10);
-            g = parseInt(rgbMatch[2], 10);
-            b = parseInt(rgbMatch[3], 10);
-            if (rgbMatch[4]) {
-              a = parseFloat(rgbMatch[4]);
+          if (sanitizedValue.includes(',')) {
+            // Format: "r, g, b"
+            const parts = sanitizedValue.split(',').map(num => parseFloat(num.trim()));
+            r = isNaN(parts[0]) ? 0 : parts[0];
+            g = isNaN(parts[1]) ? 0 : parts[1];
+            b = isNaN(parts[2]) ? 0 : parts[2];
+            if (parts.length > 3) {
+              a = isNaN(parts[3]) ? 1 : parts[3];
+            }
+          } else if (sanitizedValue.startsWith('rgb')) {
+            // Format: "rgb(r,g,b)" or "rgba(r,g,b,a)"
+            const rgbMatch = sanitizedValue.match(/rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)/);
+            if (rgbMatch) {
+              r = parseInt(rgbMatch[1], 10);
+              g = parseInt(rgbMatch[2], 10);
+              b = parseInt(rgbMatch[3], 10);
+              if (rgbMatch[4]) {
+                a = parseFloat(rgbMatch[4]);
+              }
             }
           }
-        }
 
-        // Ensure r, g, b are in 0-255 range for display purposes
-        r = Math.max(0, Math.min(255, r));
-        g = Math.max(0, Math.min(255, g));
-        b = Math.max(0, Math.min(255, b));
-        a = Math.max(0, Math.min(1, a));
+          // Ensure r, g, b are in 0-255 range for display purposes
+          r = Math.max(0, Math.min(255, r));
+          g = Math.max(0, Math.min(255, g));
+          b = Math.max(0, Math.min(255, b));
+          a = Math.max(0, Math.min(1, a));
 
-        // Store raw values in the 0-255 range for consistency
-        // This ensures all color values throughout the app use the same scale
-        updatedVariable.rawValue = { 
-          r: r,
-          g: g, 
-          b: b, 
-          a: a 
-        };
+          // Store raw values in the 0-255 range for consistency
+          // This ensures all color values throughout the app use the same scale
+          updatedVariable.rawValue = { 
+            r: r,
+            g: g, 
+            b: b, 
+            a: a 
+          };
 
-        // Update the display value for consistency
-        updatedVariable.value = `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
-
-        console.log('[DEBUG] Updated color variable:', {
-          value: updatedVariable.value,
-          rawValue: updatedVariable.rawValue,
-          displayValues: `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`
-        });
-      } else {
-        // For other types, we need to convert the value appropriately
-        switch (variable.valueType) {
-          case 'NUMBER':
-            updatedVariable.rawValue = parseFloat(newValue);
-            break;
-          case 'BOOLEAN':
-            updatedVariable.rawValue = newValue === 'true';
-            break;
-          default:  // STRING and others
-            updatedVariable.rawValue = newValue;
+          // Update the display value for consistency
+          updatedVariable.value = `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
+        } else {
+          // For other types, we need to convert the value appropriately
+          switch (variable.valueType) {
+            case 'NUMBER':
+              updatedVariable.rawValue = parseFloat(newValue);
+              break;
+            case 'BOOLEAN':
+              updatedVariable.rawValue = newValue === 'true';
+              break;
+            default:  // STRING and others
+              updatedVariable.rawValue = newValue;
+          }
         }
       }
 
       // Clear any reference data
       delete updatedVariable.referencedVariable;
     }
+
+    console.log('[DEBUG] Updated color variable (final):', {
+      value: updatedVariable.value,
+      rawValue: updatedVariable.rawValue,
+      alpha: updatedVariable.isColor && 
+             updatedVariable.rawValue && 
+             typeof updatedVariable.rawValue === 'object' && 
+             'a' in updatedVariable.rawValue ? 
+             (updatedVariable.rawValue as RGBAValue).a : 'none',
+      displayValues: updatedVariable.value
+    });
 
     // If found in the filtered variables array, update it there
     if (index !== -1) {
@@ -606,7 +653,12 @@ function VisualEditor() {
         setAllVariables(updatedAllVariables);
         console.log(`[DEBUG] Updated variable in allVariables: ${updatedVariable.name} (mode: ${updatedVariable.modeId})`, {
           value: updatedVariable.value,
-          rawValue: updatedVariable.rawValue
+          rawValue: updatedVariable.rawValue,
+          alpha: updatedVariable.isColor && 
+                 updatedVariable.rawValue && 
+                 typeof updatedVariable.rawValue === 'object' && 
+                 'a' in updatedVariable.rawValue ? 
+                 (updatedVariable.rawValue as RGBAValue).a : 'not a color'
         });
 
         // CRITICAL: Store the latest value in our ref for immediate access
@@ -951,6 +1003,11 @@ function VisualEditor() {
         name: latestVariable.name,
         value: latestVariable.value,
         rawValue: JSON.stringify(latestVariable.rawValue),
+        alpha: latestVariable.isColor && 
+               latestVariable.rawValue && 
+               typeof latestVariable.rawValue === 'object' && 
+               'a' in latestVariable.rawValue ? 
+               (latestVariable.rawValue as RGBAValue).a : 'not a color',
         isColor: latestVariable.isColor,
         valueType: latestVariable.valueType
       });
@@ -976,7 +1033,14 @@ function VisualEditor() {
             throw new Error(`Unable to format color value: ${JSON.stringify(latestVariable.rawValue)}`);
           }
 
-          console.log('[DEBUG] Formatted color value for Figma API:', JSON.stringify(formattedValue));
+          console.log('[DEBUG] Formatted color value for Figma API:', {
+            formattedValue: JSON.stringify(formattedValue),
+            alpha: formattedValue && 
+                  typeof formattedValue === 'object' && 
+                  'a' in formattedValue ? 
+                  (formattedValue as RGBAValue).a : 'missing alpha',
+            rawRGBA: formattedValue
+          });
         } catch (err) {
           console.error('[DEBUG] Error formatting color value:', err);
           throw new Error(`Failed to format color value: ${err instanceof Error ? err.message : String(err)}`);
@@ -988,20 +1052,32 @@ function VisualEditor() {
         variables: [
           {
             action: "UPDATE",
-            id: latestVariable.id!, // Add non-null assertion since we've checked above
+            id: latestVariable.id!,
             variableCollectionId: variableCollectionId,
           }
         ],
         variableModeValues: [
           {
-            variableId: latestVariable.id!, // Add non-null assertion
+            variableId: latestVariable.id!,
             modeId: latestVariable.modeId,
             value: formattedValue
           }
         ]
       };
 
+      // Log the final payload with special attention to alpha channel
       console.log('[DEBUG] Payload structure for Figma API:', JSON.stringify(variableData, null, 2));
+      
+      // Extra detailed log specifically for alpha value in the final payload
+      if (latestVariable.isColor && formattedValue && typeof formattedValue === 'object' && 'a' in formattedValue) {
+        console.log('[DEBUG] FINAL ALPHA VALUE BEING SENT TO FIGMA:', {
+          alpha: (formattedValue as RGBAValue).a,
+          r: (formattedValue as RGBAValue).r,
+          g: (formattedValue as RGBAValue).g,
+          b: (formattedValue as RGBAValue).b,
+          fullObject: formattedValue
+        });
+      }
 
       // Send to Figma API
       await figmaApi.postVariables(fileId, variableData);
@@ -1349,7 +1425,6 @@ function VisualEditor() {
                           setEditingVariables={setEditingVariables}
                           handleVariableValueChange={handleVariableValueChange}
                           handleSaveVariable={handleSaveVariable}
-                          handleColorPickerOpen={handleColorPickerOpen}
                           allVariables={allVariables}
                         />
                       );

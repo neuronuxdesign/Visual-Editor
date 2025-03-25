@@ -39,8 +39,7 @@
   .variables-table {
     border: 1px solid #e0e0e0;
     border-radius: 4px;
-    overflow: hidden;
-    
+
     .variables-row {
       display: flex;
       border-bottom: 1px solid #e0e0e0;
@@ -63,18 +62,22 @@
       padding: 8px 16px;
       
       &.variable-info-cell {
-        flex: 0 0 200px;
+        flex: 0 0 250px;
+        min-width: 250px;
+        width: 250px;
         
         .variable-info-content {
           display: flex;
           align-items: center;
+          width: 100%;
           
           .color-preview {
-            margin-right: 12px;
+            display: none; /* Hide color preview */
           }
           
           .variable-name {
             font-weight: 500;
+            width: 100%;
           }
         }
       }
@@ -93,7 +96,7 @@
         }
         
         .edit-mode-variable {
-          margin-left: 8px;
+          margin: 0 auto;
           padding: 2px 8px;
           background-color: transparent;
           border: 1px solid #ccc;
