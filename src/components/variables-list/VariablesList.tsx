@@ -4,11 +4,12 @@ import RemoveVariable from '../remove-variable/RemoveVariable';
 import ColorSelector from '../color-selector/ColorSelector';
 import VariableDropdown from '../variable-dropdown/VariableDropdown';
 import NewVariableCreator from '../new-variable-creator/NewVariableCreator';
-import './FolderVariablesList.scss';
+import LinkedVariableDetails from '../linked-variable-details/LinkedVariableDetails';
+import './VariablesList.scss';
 import { Variable, RGBAValue, FigmaVariablesData } from '../../pages/VisualEditor/types';
 import { TreeNode, SelectOption } from '../../pages/VisualEditor/types';
 
-interface FolderVariablesListProps {
+interface VariablesListProps {
   selectedNode: TreeNode;
   treeData: TreeNode[];
   variables: Variable[];
@@ -29,29 +30,14 @@ interface FolderVariablesListProps {
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   setLoadingMessage: React.Dispatch<React.SetStateAction<string>>;
   setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
-  handleVariableValueChange: (variable: Variable, newValue: string, isReference?: boolean, refVariable?: Variable) => void;
+  handleVariableValueChange: (variable: Variable, newValue: string | RGBAValue, isReference?: boolean, refVariable?: Variable) => void;
   handleSaveVariable: (variable: Variable) => Promise<void>;
   handleCancelVariableChanges: (variable: Variable) => void;
   handleSelectNode: (nodeId: string) => void;
   processVariableData: (data: FigmaVariablesData) => void;
 }
 
-// Helper function to resolve a variable reference chain
-const resolveVariableChain = (variableId: string, variables: Variable[]): Variable | null => {
-  const variable = variables.find(v => v.id === variableId);
-  if (!variable) return null;
-
-  // If the variable references another variable, follow the chain
-  if (variable.referencedVariable && variable.referencedVariable.id) {
-    const referencedVariable = resolveVariableChain(variable.referencedVariable.id, variables);
-    if (referencedVariable) return referencedVariable;
-  }
-
-  // Otherwise, return the variable itself
-  return variable;
-};
-
-const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
+const VariablesList: React.FC<VariablesListProps> = ({
   selectedNode,
   treeData,
   variables,
@@ -269,98 +255,16 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                     {modeVariable ? (
                       <>
                         {/* Special handling for VARIABLE_ALIAS type */}
-                        {modeVariable.valueType === 'VARIABLE_ALIAS' && modeVariable.referencedVariable ? (
+                        {modeVariable.rawValue.type === 'VARIABLE_ALIAS' && modeVariable.referencedVariable ? (
                           <div className="variable-alias-display">
-                            {(() => {
-                              // Get the final variable in the reference chain
-                              const finalVariable = modeVariable.referencedVariable?.id ?
-                                resolveVariableChain(modeVariable.referencedVariable.id, allVariables) : null;
-
-                              if (!finalVariable) {
-                                return <span>Unknown reference</span>;
-                              }
-
-                              // Extract the color preview from the final variable
-                              let colorPreview = null;
-                              if (finalVariable.isColor && finalVariable.rawValue) {
-                                try {
-                                  const colorValue = finalVariable.rawValue as RGBAValue;
-                                  if (typeof colorValue === 'object' &&
-                                    'r' in colorValue && typeof colorValue.r === 'number' &&
-                                    'g' in colorValue && typeof colorValue.g === 'number' &&
-                                    'b' in colorValue && typeof colorValue.b === 'number') {
-
-                                    const r = Math.round(colorValue.r * 255);
-                                    const g = Math.round(colorValue.g * 255);
-                                    const b = Math.round(colorValue.b * 255);
-                                    const a = colorValue.a || 1;
-
-                                    colorPreview = (
-                                      <div
-                                        className="color-preview"
-                                        style={{
-                                          backgroundColor: `rgba(${r}, ${g}, ${b}, ${a})`,
-                                          width: '20px',
-                                          height: '20px',
-                                          borderRadius: '4px',
-                                          border: '1px solid #ddd',
-                                          display: 'inline-block',
-                                          marginRight: '8px',
-                                          verticalAlign: 'middle'
-                                        }}
-                                      />
-                                    );
-                                  }
-                                } catch (error) {
-                                  console.error("Error creating color preview:", error);
-                                }
-                              }
-
-                              return (
-                                <>
-                                  <div className="reference-display">
-                                    {colorPreview}
-
-                                    {/* Button that links to the referenced variable */}
-                                    <button
-                                      className="reference-var-button"
-                                      onClick={() => {
-                                        // Handle clicking on the reference to navigate to that variable
-                                        if (finalVariable.id) {
-                                          handleSelectNode(finalVariable.id);
-                                        }
-                                      }}
-                                    >
-                                      {finalVariable.name}
-                                    </button>
-                                  </div>
-
-                                  {/* Show edit dropdown if needed */}
-                                  {modeVariable.id && editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
-                                    <div className="reference-edit">
-                                      {modeVariable.isColor ? (
-                                        <ColorSelector
-                                          variable={modeVariable}
-                                          allVariables={allVariables}
-                                          onValueChange={handleVariableValueChange}
-                                          valueOnly={false}
-                                          key={`folder-list-ref-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
-                                        />
-                                      ) : (
-                                        <VariableDropdown
-                                          variable={modeVariable}
-                                          allVariables={allVariables}
-                                          onValueChange={handleVariableValueChange}
-                                          valueOnly={false}
-                                          onSave={handleSaveVariable}
-                                          key={`folder-list-dropdown-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
-                                        />
-                                      )}
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
+                            <LinkedVariableDetails
+                              variableData={modeVariable}
+                              allVariables={allVariables}
+                              editingVariables={editingVariables}
+                              handleSaveVariable={handleSaveVariable}
+                              handleVariableValueChange={handleVariableValueChange}
+                              onNavigateToReference={handleSelectNode}
+                            />
                           </div>
                         ) : (
                           // Regular variable display code
@@ -399,10 +303,12 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                               }
                             })()}
 
-                            {/* Show the variable value */}
-                            <span key={`value-${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}-${uniqueId}`}>
-                              {modeVariable.value}
-                            </span>
+                            {/* Show the variable value - skip for VARIABLE_ALIAS type */}
+                            {modeVariable.valueType !== 'VARIABLE_ALIAS' && (
+                              <span key={`value-${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}-${uniqueId}`}>
+                                {modeVariable.value}
+                              </span>
+                            )}
 
                             {/* Show edit button when not in edit mode */}
                             {modeVariable.id && !editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
@@ -449,7 +355,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                         const currentVariable = allVariables.find(
                                           v => v.id === modeVariable.id && v.modeId === modeVariable.modeId
                                         );
-                                        
+
                                         if (currentVariable) {
                                           // Use the latest version from state
                                           console.log('[DEBUG] Save button - using latest variable state:', {
@@ -458,7 +364,7 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
                                             originalValue: modeVariable.value,
                                             latestValue: currentVariable.value
                                           });
-                                          
+
                                           handleSaveVariable(currentVariable);
                                         } else {
                                           // Fallback to the variable from render props if not found
@@ -543,4 +449,4 @@ const FolderVariablesList: React.FC<FolderVariablesListProps> = ({
   );
 };
 
-export default FolderVariablesList; 
+export default VariablesList;

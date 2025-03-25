@@ -20,7 +20,7 @@ import { formatNonColorValue as utilFormatNonColorValue } from './utils/variable
 import MappingPreview from '../../components/mapping-preview/MappingPreview';
 
 // Import our new components
-import FolderVariablesList from '../../components/folder-variables-list/FolderVariablesList';
+import VariablesList from '../../components/variables-list/VariablesList';
 import VariableDetails from '../../components/variable-details/VariableDetails';
 
 // Define options for selectors
@@ -1476,10 +1476,10 @@ function VisualEditor() {
                   // If no node is found or has been selected
                   if (!selectedNode) return null;
                   
-                  // If it's a folder, show its variables using FolderVariablesList component
+                  // If it's a folder, show its variables using VariablesList component
                   if (selectedNode.type === 'folder') {
                     return (
-                      <FolderVariablesList
+                      <VariablesList
                         selectedNode={selectedNode}
                         treeData={treeData}
                         variables={variables}
