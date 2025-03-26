@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import './ColorSelector.scss';
+import Button from '../../ui/Button';
 
 // Import types from the central types file
-import { RGBAValue, Variable } from '../../pages/VisualEditor/types';
+import { Variable, RGBAValue } from '../../pages/VisualEditor/types';
+import ColorPreview, { getRgbaString } from '../color-preview/ColorPreview';
+import ReferenceChainPreview from '../reference-chain-preview/ReferenceChainPreview';
 
 // Interface for dropdown options
 interface VariableOption {
@@ -48,9 +51,25 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
   const [customAlpha, setCustomAlpha] = useState((variable.rawValue as RGBAValue)?.a || 1);
   const [lastAppliedValue, setLastAppliedValue] = useState(variable.value);
   const [dropdownPosition, setDropdownPosition] = useState<'top' | 'bottom'>('bottom');
+  const [originalValue, setOriginalValue] = useState<{
+    value: string;
+    rawValue: RGBAValue;
+    referencedVariable?: Variable;
+  } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
   
+  // Store original value on first load
+  useEffect(() => {
+    if (!originalValue) {
+      setOriginalValue({
+        value: variable.value,
+        rawValue: variable.rawValue as RGBAValue,
+        referencedVariable: variable.referencedVariable
+      });
+    }
+  }, []);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -230,52 +249,79 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
     setIsOpen(false);
   };
 
+  // Reset to original value when canceling
+  const handleCancel = () => {
+    if (originalValue) {
+      console.log('[DEBUG] ColorSelector canceling changes, restoring original value:', {
+        originalValue,
+        currentValue: variable.value,
+        variableId: variable.id,
+        time: new Date().toISOString()
+      });
+
+      if (originalValue.referencedVariable) {
+        onValueChange(variable, originalValue.value, true, originalValue.referencedVariable);
+      } else {
+        // Create a proper RGBA object with the original alpha value
+        const rgbaValue = originalValue.rawValue;
+        const updatedVariable = {...variable};
+        updatedVariable.value = originalValue.value;
+        updatedVariable.rawValue = rgbaValue;
+        onValueChange(updatedVariable, rgbaValue);
+      }
+    }
+    setIsOpen(false);
+  };
+
   // Determine what to display in the dropdown
   const getDisplayValue = () => {
-    // Always show the most recently applied value rather than variable.value
     if (variable.referencedVariable) {
-      // Try to find the original variable name if it's missing
       let refName = variable.referencedVariable.name;
       if (!refName || refName === 'undefined') {
-        // Look for the variable by ID in allVariables
         const refId = variable.referencedVariable.id;
         const originalVar = allVariables.find(v => v.id === refId);
         refName = originalVar?.name || (refId ? `Variable (${refId.substring(0, 8)}...)` : 'Unknown Variable');
       }
       
-      const alpha = (variable.referencedVariable.finalValue as RGBAValue)?.a || 1;
+      const refValue = variable.referencedVariable.finalValue as RGBAValue;
       
       return (
-        <div className="value-with-reference" title={`Variable ID: ${variable.referencedVariable.id}`}>
-          <span>→ {refName} ({variable.referencedVariable.collection})</span>
-          <div 
-            className="color-preview" 
-            style={{ 
-              backgroundColor: `rgba(${lastAppliedValue || variable.value}, ${alpha})`,
-              width: '16px',
-              height: '16px',
-              borderRadius: '3px',
-              border: '1px solid #ddd'
-            }}
-          />
+        <div className="value-with-reference" title={`Referenced variable: ${refName} from ${variable.referencedVariable.collection}`}>
+          <div className="simplified-reference">
+            <span>→ {refName} ({variable.referencedVariable.collection})</span>
+            {refValue && (
+              <ColorPreview
+                color={refValue}
+                size="small"
+                className="reference-color-preview"
+              />
+            )}
+          </div>
+          {variable.referencedVariable.id && (
+            <div className="dropdown-reference-chain collapsed">
+              <ReferenceChainPreview 
+                variableId={variable.referencedVariable.id}
+                allVariables={allVariables}
+                showColorPreview={false}
+                className="in-display"
+              />
+            </div>
+          )}
         </div>
       );
     } else {
-      const alpha = (variable.rawValue as RGBAValue)?.a || 1;
+      const rawValue = variable.rawValue as RGBAValue;
       
       return (
         <div className="value-with-preview">
           <span>{lastAppliedValue || variable.value}</span>
-          <div 
-            className="color-preview" 
-            style={{ 
-              backgroundColor: `rgba(${lastAppliedValue || variable.value}, ${alpha})`,
-              width: '16px',
-              height: '16px',
-              borderRadius: '3px',
-              border: '1px solid #ddd'
-            }}
-          />
+          {rawValue && (
+            <ColorPreview
+              color={rawValue}
+              size="small"
+              className="value-color-preview"
+            />
+          )}
         </div>
       );
     }
@@ -289,45 +335,35 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
   return (
     <div className="color-selector" ref={dropdownRef}>
       {valueOnly ? (
-        // Simplified value-only view for variables
         <div className="value-only">
           {variable.referencedVariable ? (
-            // Show referenced variable
             <div 
               className="value-with-reference" 
               title={`Referenced variable: ${variable.referencedVariable.name} from ${variable.referencedVariable.collection}`}
             >
-              <div 
-                className="color-preview" 
-                style={{
-                  width: '16px', 
-                  height: '16px', 
-                  borderRadius: '3px',
-                  border: '1px solid #ddd',
-                  backgroundColor: `rgba(${variable.value || '0, 0, 0'}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`
-                }}
-              ></div>
+              {variable.referencedVariable.finalValue && (
+                <ColorPreview
+                  color={variable.referencedVariable.finalValue as RGBAValue}
+                  size="small"
+                  className="value-only-preview"
+                />
+              )}
               <span>{variable.referencedVariable.name}</span>
             </div>
           ) : (
-            // Show direct value
             <div className="value-display">
-              <div 
-                className="color-preview" 
-                style={{
-                  width: '16px', 
-                  height: '16px', 
-                  borderRadius: '3px',
-                  border: '1px solid #ddd',
-                  backgroundColor: `rgba(${variable.value || '0, 0, 0'}, ${(variable.rawValue as RGBAValue)?.a || 1})`
-                }}
-              ></div>
+              {variable.rawValue && (
+                <ColorPreview
+                  color={variable.rawValue as RGBAValue}
+                  size="small"
+                  className="value-only-preview"
+                />
+              )}
               <span>{variable.value}</span>
             </div>
           )}
         </div>
       ) : (
-        // Standard dropdown view with full interaction
         <>
           <div className="dropdown-display" onClick={handleToggleDropdown}>
             <div className="value-display">
@@ -357,7 +393,20 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
                   value={customValue}
                   onChange={(e) => setCustomValue(e.target.value)}
                 />
-                <button onClick={handleApplyCustomValue}>Apply</button>
+                <Button 
+                  variant="primary"
+                  onClick={handleApplyCustomValue}
+                >
+                  Apply
+                </Button>
+                <Button 
+                  variant="outlined"
+                  danger
+                  onClick={handleCancel}
+                  className="cancel-button"
+                >
+                  Cancel
+                </Button>
               </div>
               
               <div className="dropdown-color-preview">
@@ -367,7 +416,12 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
                     className="color-overlay"
                     key={`${instanceId}-color-overlay-${customAlpha}`}
                     style={{
-                      backgroundColor: `rgba(${customValue || '0, 0, 0'}, ${customAlpha})`,
+                      backgroundColor: getRgbaString({
+                        r: parseInt(customValue.split(',')[0] || '0'),
+                        g: parseInt(customValue.split(',')[1] || '0'),
+                        b: parseInt(customValue.split(',')[2] || '0'),
+                        a: customAlpha
+                      })
                     }}
                   />
                 </div>
@@ -392,23 +446,46 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
               <div className="dropdown-options">
                 {getOptions().map((option, index) => (
                   <div 
-                    key={`${instanceId}-option-${option.value}-${index}`}
-                    className="dropdown-option"
-                    onClick={() => handleSelectReference(option)}
+                    key={`${option.value}-${index}`} 
+                    className={`dropdown-option ${option.isCustom ? 'custom-option' : ''}`}
+                    onClick={() => {
+                      if (option.isCustom) {
+                        handleApplyCustomValue();
+                      } else {
+                        handleSelectReference(option);
+                      }
+                    }}
                   >
-                    <div className="option-label">{option.label}</div>
-                    {option.color && (
-                      <div 
-                        className="color-preview"
-                        style={{ 
-                          width: '16px',
-                          height: '16px',
-                          borderRadius: '3px',
-                          border: '1px solid #ddd',
-                          background: `rgba(${option.color.r * 255}, ${option.color.g * 255}, ${option.color.b * 255}, ${option.color.a})`
-                        }} 
-                      ></div>
-                    )}
+                    <div className="option-content">
+                      <div className="option-label">
+                        {option.color && (
+                          <div 
+                            className="color-preview" 
+                            style={{ 
+                              backgroundColor: getRgbaString(option.color),
+                              width: '12px', 
+                              height: '12px', 
+                              borderRadius: '2px',
+                              marginRight: '5px',
+                              display: 'inline-block',
+                              verticalAlign: 'middle'
+                            }} 
+                          />
+                        )}
+                        <span>{option.label}</span>
+                      </div>
+                      
+                      {option.original && option.original.valueType === 'VARIABLE_ALIAS' && option.original.referencedVariable && (
+                        <div className="option-reference-preview">
+                          <ReferenceChainPreview 
+                            variableId={option.original.referencedVariable.id}
+                            allVariables={allVariables}
+                            showColorPreview={true}
+                            className="in-dropdown"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

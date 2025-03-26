@@ -64,6 +64,7 @@ export const resolveVariableReferences = (
   ): Variable | null => {
     // Check for circular references
     if (visitedIds.has(varId)) {
+      console.warn(`Circular reference detected for variable ID: ${varId}`);
       return null;
     }
     visitedIds.add(varId);
@@ -74,8 +75,12 @@ export const resolveVariableReferences = (
     // Find the variable by ID
     const variable = fileVariables.find(v => v.id === varId);
     if (!variable) {
+      console.warn(`Variable not found with ID: ${varId} in file: ${fileId}`);
       return null;
     }
+    
+    // Debug log to trace the chain
+    console.log(`Found variable in chain: ${variable.name} (${variable.id}), type: ${variable.valueType}`);
     
     // Find the collection name for this variable (or use default if not found)
     const collectionName = variable.collectionName || "Unknown Collection";
@@ -135,6 +140,7 @@ export const resolveVariableReferences = (
       errorMessage: finalVariable ? undefined : "Could not resolve variable reference chain"
     };
   } catch (error) {
+    console.error("Error resolving variable references:", error);
     return {
       finalVariable: null,
       referenceChain,
@@ -189,26 +195,51 @@ export const formatReferenceChain = (referenceChain: ReferenceChainStep[]): stri
  * @returns RGBAValue or null if not a color or extraction fails
  */
 export const extractColorFromVariable = (variable: Variable | null): RGBAValue | null => {
-  if (!variable?.isColor || !variable.rawValue) {
+  if (!variable) {
+    console.log("extractColorFromVariable: variable is null");
+    return null;
+  }
+  
+  if (!variable.isColor) {
+    console.log(`extractColorFromVariable: variable ${variable.name} is not a color`);
+    return null;
+  }
+  
+  if (!variable.rawValue) {
+    console.log(`extractColorFromVariable: variable ${variable.name} has no rawValue`);
     return null;
   }
   
   try {
+    // Log the raw value for debugging
+    console.log("extractColorFromVariable raw value:", {
+      variableName: variable.name,
+      rawValue: variable.rawValue,
+      valueType: typeof variable.rawValue
+    });
+    
     const colorValue = variable.rawValue as RGBAValue;
+    
+    // Check if the rawValue is an RGBA object
     if (typeof colorValue === 'object' &&
       'r' in colorValue && typeof colorValue.r === 'number' &&
       'g' in colorValue && typeof colorValue.g === 'number' &&
       'b' in colorValue && typeof colorValue.b === 'number') {
 
-      const r = Math.round(colorValue.r);
-      const g = Math.round(colorValue.g);
-      const b = Math.round(colorValue.b);
+      const r = typeof colorValue.r === 'number' ? colorValue.r : 0;
+      const g = typeof colorValue.g === 'number' ? colorValue.g : 0;
+      const b = typeof colorValue.b === 'number' ? colorValue.b : 0;
       const a = colorValue.a || 1;
 
+      // Log the extracted color values
+      console.log(`extractColorFromVariable: successful extraction for ${variable.name}: rgba(${r}, ${g}, ${b}, ${a})`);
+      
       return { r, g, b, a };
+    } else {
+      console.log(`extractColorFromVariable: rawValue for ${variable.name} is not a valid RGBA object:`, colorValue);
     }
   } catch (error) {
-    console.error("Error extracting color from variable:", error);
+    console.error("Error extracting color from variable:", variable.name, error);
   }
   
   return null;

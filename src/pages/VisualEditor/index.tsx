@@ -5,6 +5,7 @@ import figmaApi from '../../utils/figmaApi'
 import figmaConfig from '../../utils/figmaConfig'
 import NeuronLogo from '../../assets/Neuron.svg'
 import TreeView from '../../components/tree-view'
+import Button from '../../ui/Button'
 
 // Import our types from the types file
 import { 
@@ -484,135 +485,107 @@ function VisualEditor() {
       // Handle reference to another variable - ensure refVariable has an id
       if (!refVariable.id) return;
 
+      // Extract file ID if this is a cross-file reference
+      // Format: fileId/variableId or just variableId for same-file references
+      const refId = refVariable.id;
+      const refFileId = refVariable.fileId || ''; // This field would need to be added to the Variable interface
+      
+      // Store proper reference information
       updatedVariable.value = refVariable.value;
+      updatedVariable.valueType = 'VARIABLE_ALIAS'; // Mark as an alias
       updatedVariable.referencedVariable = {
-        id: refVariable.id,
+        id: refFileId ? `${refFileId}/${refId}` : refId, // Format ID properly for cross-file references
         collection: refVariable.collectionName,
-        name: refVariable.name || `Variable (${refVariable.id.substring(0, 8)}...)`,
+        name: refVariable.name || `Variable (${refId.substring(0, 8)}...)`,
         finalValue: refVariable.rawValue,
         finalValueType: refVariable.valueType
       };
       
-      // For our simplified version, we'll keep the original format but add a special marker
-      if (refVariable.isColor && refVariable.rawValue && typeof refVariable.rawValue === 'object' && 'r' in refVariable.rawValue) {
-        // Copy the color value but mark it as a reference
-        updatedVariable.rawValue = {
-          ...(refVariable.rawValue as RGBAValue),
-          isReference: true,  // Custom flag to mark this as a reference
-          referenceId: refVariable.id
-        };
-      } else {
-        // For non-colors, just store the reference info
-        updatedVariable.rawValue = {
-          value: refVariable.value,
-          isReference: true,
-          referenceId: refVariable.id,
-          referenceType: refVariable.valueType
-        };
-      }
-    } 
-    // DIRECT RGBA OBJECT: Handle when we receive an RGBA object directly
-    else if (variable.isColor && 
-             typeof newValue === 'object' && 
-             newValue !== null && 
-             'r' in newValue && 
-             'g' in newValue && 
-             'b' in newValue && 
-             'a' in newValue) {
+      // For Figma API, prepare the actual reference object
+      updatedVariable.rawValue = {
+        type: "VARIABLE_ALIAS",
+        id: refFileId ? `${refFileId}/${refId}` : refId
+      };
       
-      const rgbaValue = newValue as RGBAValue;
-      
-      // If the updatedVariable already has a rawValue with the same RGB values, 
-      // it means ColorSelector already set it, just ensure alpha is correct
-      if (updatedVariable.rawValue && 
-          typeof updatedVariable.rawValue === 'object' && 
-          'r' in updatedVariable.rawValue && 
-          'g' in updatedVariable.rawValue && 
-          'b' in updatedVariable.rawValue) {
-          
-          // Check if we have the same RGB values (likely came from ColorSelector)
-          const existingRawValue = updatedVariable.rawValue as RGBAValue;
-          if (existingRawValue.r === rgbaValue.r && 
-              existingRawValue.g === rgbaValue.g && 
-              existingRawValue.b === rgbaValue.b) {
-              
-              // Keep RGB values, ensure alpha is from the passed RGBA object
-              existingRawValue.a = rgbaValue.a;
-              
-              console.log('[DEBUG] Preserved existing rawValue but updated alpha:', {
-                alpha: rgbaValue.a,
-                r: existingRawValue.r,
-                g: existingRawValue.g,
-                b: existingRawValue.b,
-                variable: variable.name
-              });
-              
-              // No need to replace the entire object since we just updated the alpha
-              // and updateVariable.rawValue already references existingRawValue
-          } else {
-              // Different RGB values, replace the entire object
-              updatedVariable.rawValue = { 
-                r: rgbaValue.r,
-                g: rgbaValue.g, 
-                b: rgbaValue.b, 
-                a: rgbaValue.a 
-              };
-          }
-      } else {
-          // No existing rawValue, create a new one
-          updatedVariable.rawValue = { 
-            r: rgbaValue.r,
-            g: rgbaValue.g, 
-            b: rgbaValue.b, 
-            a: rgbaValue.a 
-          };
-      }
-      
-      // Update the display value for UI purposes only
-      updatedVariable.value = `${Math.round(rgbaValue.r)}, ${Math.round(rgbaValue.g)}, ${Math.round(rgbaValue.b)}`;
-      
-      console.log('[DEBUG] Using direct RGBA object with alpha:', {
-        r: rgbaValue.r,
-        g: rgbaValue.g,
-        b: rgbaValue.b,
-        a: rgbaValue.a,
-        variableName: variable.name
+      console.log('[DEBUG] Setting variable reference:', {
+        variableName: updatedVariable.name,
+        referencedId: updatedVariable.referencedVariable.id,
+        referencedName: updatedVariable.referencedVariable.name,
+        referencedCollection: updatedVariable.referencedVariable.collection,
+        rawValue: updatedVariable.rawValue
       });
-      
-      // Clear any reference data
-      delete updatedVariable.referencedVariable;
     }
     else {
-      // IMPORTANT CHECK: If a variable with rawValue is passed directly, use its rawValue
-      // This handles the case when ColorSelector passes the entire variable with updated alpha
+      // DIRECT RGBA OBJECT: Handle when we receive an RGBA object directly
       if (variable.isColor && 
-          variable.rawValue && 
-          typeof variable.rawValue === 'object' && 
-          'r' in variable.rawValue &&
-          'g' in variable.rawValue &&
-          'b' in variable.rawValue &&
-          'a' in variable.rawValue) {
-          
-        // We received an entire variable with rawValue containing alpha
-        // Just update our variable copy with this raw value
-        const rgba = variable.rawValue as RGBAValue;
+               typeof newValue === 'object' && 
+               newValue !== null && 
+               'r' in newValue && 
+               'g' in newValue && 
+               'b' in newValue && 
+               'a' in newValue) {
         
-        updatedVariable.rawValue = { 
-          r: rgba.r,
-          g: rgba.g, 
-          b: rgba.b, 
-          a: rgba.a 
-        };
+        const rgbaValue = newValue as RGBAValue;
         
-        console.log('[DEBUG] Using directly provided rgba in variable:', {
-          r: rgba.r,
-          g: rgba.g,
-          b: rgba.b,
-          a: rgba.a
+        // If the updatedVariable already has a rawValue with the same RGB values, 
+        // it means ColorSelector already set it, just ensure alpha is correct
+        if (updatedVariable.rawValue && 
+            typeof updatedVariable.rawValue === 'object' && 
+            'r' in updatedVariable.rawValue && 
+            'g' in updatedVariable.rawValue && 
+            'b' in updatedVariable.rawValue) {
+            
+            // Check if we have the same RGB values (likely came from ColorSelector)
+            const existingRawValue = updatedVariable.rawValue as RGBAValue;
+            if (existingRawValue.r === rgbaValue.r && 
+                existingRawValue.g === rgbaValue.g && 
+                existingRawValue.b === rgbaValue.b) {
+                
+                // Keep RGB values, ensure alpha is from the passed RGBA object
+                existingRawValue.a = rgbaValue.a;
+                
+                console.log('[DEBUG] Preserved existing rawValue but updated alpha:', {
+                  alpha: rgbaValue.a,
+                  r: existingRawValue.r,
+                  g: existingRawValue.g,
+                  b: existingRawValue.b,
+                  variable: variable.name
+                });
+                
+                // No need to replace the entire object since we just updated the alpha
+                // and updateVariable.rawValue already references existingRawValue
+            } else {
+                // Different RGB values, replace the entire object
+                updatedVariable.rawValue = { 
+                  r: rgbaValue.r,
+                  g: rgbaValue.g, 
+                  b: rgbaValue.b, 
+                  a: rgbaValue.a 
+                };
+            }
+        } else {
+            // No existing rawValue, create a new one
+            updatedVariable.rawValue = { 
+              r: rgbaValue.r,
+              g: rgbaValue.g, 
+              b: rgbaValue.b, 
+              a: rgbaValue.a 
+            };
+        }
+        
+        // Update the display value for UI purposes only
+        updatedVariable.value = `${Math.round(rgbaValue.r)}, ${Math.round(rgbaValue.g)}, ${Math.round(rgbaValue.b)}`;
+        
+        console.log('[DEBUG] Using direct RGBA object with alpha:', {
+          r: rgbaValue.r,
+          g: rgbaValue.g,
+          b: rgbaValue.b,
+          a: rgbaValue.a,
+          variableName: variable.name
         });
         
-        // Update the display value for consistency, but don't include alpha in the display
-        updatedVariable.value = `${Math.round(rgba.r)}, ${Math.round(rgba.g)}, ${Math.round(rgba.b)}`;
+        // Clear any reference data
+        delete updatedVariable.referencedVariable;
       }
       // Handle direct value update (not a reference)
       else if (typeof newValue === 'string') {
@@ -666,7 +639,7 @@ function VisualEditor() {
             b: b, 
             a: a 
           };
- 
+   
           console.log('[DEBUG] Storing color with alpha:', {
             variableName: updatedVariable.name,
             rawValue: updatedVariable.rawValue,
@@ -1111,8 +1084,23 @@ function VisualEditor() {
       // Ensure value is in the correct format for Figma API
       let formattedValue: Record<string, unknown> | number | string | boolean | RGBAValue | null = latestVariable.rawValue;
 
+      // For variable references (aliases)
+      if (latestVariable.valueType === 'VARIABLE_ALIAS' && latestVariable.referencedVariable?.id) {
+        // Format variable alias reference for Figma API
+        formattedValue = {
+          type: "VARIABLE_ALIAS",
+          id: latestVariable.referencedVariable.id
+        };
+        
+        console.log('[DEBUG] Formatting variable alias reference for Figma API:', {
+          type: "VARIABLE_ALIAS",
+          id: latestVariable.referencedVariable.id,
+          referencedName: latestVariable.referencedVariable.name,
+          collection: latestVariable.referencedVariable.collection
+        });
+      }
       // For color variables, ensure proper RGBA format
-      if (latestVariable.isColor) {
+      else if (latestVariable.isColor) {
         try {
           // For color variables, make sure we're sending a properly normalized RGBA object
           if (latestVariable.rawValue && typeof latestVariable.rawValue === 'object' && 'r' in latestVariable.rawValue) {
@@ -1433,37 +1421,47 @@ function VisualEditor() {
           </div>
             
             <div className="action-buttons">
-              <button className="action-button" onClick={ handlePullFromFigma }>
-                { isLoading ? (
+              <Button 
+                variant="primary"
+                onClick={handlePullFromFigma}
+              >
+                {isLoading ? (
                   <>
                     <span className="spinner" />
                     <span>Loading...</span>
                   </>
-                ) : 'Sync' }
-              </button>
-              <MappingPreview allVariables={ allVariables }
-                figmaData={ figmaData }
-                modeMapping={ modeMapping }
-                selectedModes={ selectedModes }
-                selectedBrand={ selectedBrand }
-                selectedGrade={ selectedGrade }
-                selectedDevice={ selectedDevice }
-                selectedThemes={ selectedThemes }
+                ) : 'Sync'}
+              </Button>
+              <MappingPreview allVariables={allVariables}
+                figmaData={figmaData}
+                modeMapping={modeMapping}
+                selectedModes={selectedModes}
+                selectedBrand={selectedBrand}
+                selectedGrade={selectedGrade}
+                selectedDevice={selectedDevice}
+                selectedThemes={selectedThemes}
               />
              </div>
         
-            { loadingMessage && (
-          <div className="status-message success-message">
-                { loadingMessage }
-          </div>
-            ) }
+            {loadingMessage && (
+              <div className="status-message success-message">
+                {loadingMessage}
+              </div>
+            )}
         
-            { errorMessage && (
-          <div className="status-message error-message">
-                { errorMessage }
-                <button className="dismiss-button" onClick={ () => setErrorMessage(null) }>×</button>
-          </div>
-            ) }
+            {errorMessage && (
+              <div className="status-message error-message">
+                {errorMessage}
+                <Button 
+                  variant="primary"
+                  danger
+                  className="dismiss-button" 
+                  onClick={() => setErrorMessage(null)}
+                >
+                  ×
+                </Button>
+              </div>
+            )}
         </div>
 
           <div className="content-area">

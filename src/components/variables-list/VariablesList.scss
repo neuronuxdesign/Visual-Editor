@@ -109,8 +109,18 @@
             display: none;
           }
           
+          /* Add new styles for the color preview */
+          display: flex;
+          align-items: center;
+          
+          .reference-chain-color-preview {
+            margin-right: 8px;
+            flex-shrink: 0;
+          }
+          
           /* Style for LinkedVariableDetails component inside table cells */
           .linked-variable-details {
+            flex: 1;
             padding: 0;
             background-color: transparent;
             border-radius: 0;
@@ -180,12 +190,42 @@
               }
             }
             
-            /* Ensure the chain is visible */
+            /* Ensure the reference chain and final value are visible */
             .property-row:nth-child(5) {
               display: flex;
               
-              .reference-chain-container {
-                font-size: 11px;
+              .reference-chain-section {
+                width: 100%;
+                
+                .reference-chain-preview {
+                  width: 100%;
+                  
+                  .reference-chain-text {
+                    font-size: 11px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 95%;
+                  }
+                  
+                  .reference-final-value {
+                    display: flex !important;
+                    margin-top: 4px;
+                    background-color: #f5f5f5;
+                    border-radius: 3px;
+                    padding: 3px 6px;
+                    border: 1px solid #eee;
+                    
+                    .color-value-display {
+                      display: flex !important;
+                    }
+                    
+                    .text-value-small {
+                      font-size: 12px;
+                      display: inline-block !important;
+                    }
+                  }
+                }
               }
             }
             
@@ -211,53 +251,13 @@
           font-style: italic;
         }
         
-        .edit-mode-variable {
-          margin: 0 auto;
-          padding: 2px 8px;
-          background-color: transparent;
-          border: 1px solid #ccc;
-          border-radius: 3px;
-          cursor: pointer;
-          font-size: 12px;
-          
-          &:hover {
-            background-color: #f0f0f0;
-          }
-        }
-        
         .variable-edit-container {
           margin-top: 8px;
           
           .mode-buttons {
             display: flex;
+            gap: 8px;
             margin-top: 8px;
-            
-            button {
-              padding: 4px 12px;
-              border-radius: 3px;
-              cursor: pointer;
-              font-size: 12px;
-              margin-right: 8px;
-              
-              &.mode-save-btn {
-                background-color: #4caf50;
-                border: none;
-                color: white;
-                
-                &:hover {
-                  background-color: #43a047;
-                }
-              }
-              
-              &.mode-cancel-btn {
-                background-color: transparent;
-                border: 1px solid #ccc;
-                
-                &:hover {
-                  background-color: #f0f0f0;
-                }
-              }
-            }
           }
         }
       }

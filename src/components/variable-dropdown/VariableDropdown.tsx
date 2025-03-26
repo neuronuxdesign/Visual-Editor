@@ -4,6 +4,8 @@ import './VariableDropdown.scss';
 // Import types
 import { Variable, RGBAValue } from '../../types/common';
 import { VariableOption, VariableDropdownProps } from './types';
+import ReferenceChainPreview from '../reference-chain-preview/ReferenceChainPreview';
+import Button from '../../ui/Button';
 
 // Helper function to find a variable by its value
 const findVariableByValue = (
@@ -27,6 +29,10 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [customValue, setCustomValue] = useState(variable.value);
   const [lastAppliedValue, setLastAppliedValue] = useState(variable.value);
+  const [originalValue, setOriginalValue] = useState<{
+    value: string;
+    referencedVariable?: Variable;
+  } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Close dropdown when clicking outside
@@ -49,6 +55,16 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
     setLastAppliedValue(variable.value);
   }, [variable, variable.value]);
   
+  // Store original value on first load
+  useEffect(() => {
+    if (!originalValue) {
+      setOriginalValue({
+        value: variable.value,
+        referencedVariable: variable.referencedVariable
+      });
+    }
+  }, []);
+
   // Generate options from all variables
   const getOptions = (): VariableOption[] => {
     // First, get all variables that match the current variable's type
@@ -131,6 +147,25 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
     setIsOpen(false);
   };
 
+  // Reset to original value when canceling
+  const handleCancel = () => {
+    if (originalValue) {
+      console.log('[DEBUG] Canceling changes, restoring original value:', {
+        originalValue,
+        currentValue: variable.value,
+        variableId: variable.id,
+        time: new Date().toISOString()
+      });
+
+      if (originalValue.referencedVariable) {
+        onValueChange(variable, originalValue.value, true, originalValue.referencedVariable);
+      } else {
+        onValueChange(variable, originalValue.value);
+      }
+    }
+    setIsOpen(false);
+  };
+
   // Determine what to display in the dropdown
   const getDisplayValue = () => {
     // Always show the most recently applied value rather than variable.value
@@ -145,19 +180,32 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
       }
       
       return (
-        <div className="value-with-reference" title={`Variable ID: ${variable.referencedVariable.id}`}>
-          <span>→ {refName} ({variable.referencedVariable.collection})</span>
-          {variable.isColor && variable.referencedVariable.finalValueType === 'color' && (
-            <div 
-              className="color-preview" 
-              style={{ 
-                backgroundColor: `rgba(${lastAppliedValue || variable.value}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`,
-                width: '16px',
-                height: '16px',
-                borderRadius: '3px',
-                border: '1px solid #ddd'
-              }}
-            />
+        <div className="value-with-reference" title={`Referenced variable: ${refName} from ${variable.referencedVariable.collection}`}>
+          <div className="simplified-reference">
+            <span>→ {refName} ({variable.referencedVariable.collection})</span>
+            {variable.isColor && variable.referencedVariable.finalValueType === 'color' && (
+              <div 
+                className="color-preview" 
+                style={{ 
+                  backgroundColor: `rgba(${lastAppliedValue || variable.value}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`,
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '3px',
+                  border: '1px solid #ddd'
+                }}
+              />
+            )}
+          </div>
+          {/* Show reference chain preview collapsed in the main display */}
+          {variable.referencedVariable.id && (
+            <div className="dropdown-reference-chain collapsed">
+              <ReferenceChainPreview 
+                variableId={variable.referencedVariable.id}
+                allVariables={allVariables}
+                showColorPreview={false}
+                className="in-display"
+              />
+            </div>
           )}
         </div>
       );
@@ -259,29 +307,59 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
                   value={customValue}
                   onChange={(e) => setCustomValue(e.target.value)}
                 />
-                <button onClick={handleApplyCustomValue}>Apply</button>
+                <Button
+                  variant="primary"
+                  onClick={handleApplyCustomValue}
+                >
+                  Apply
+                </Button>
+                <Button
+                  variant="outlined"
+                  danger
+                  onClick={handleCancel}
+                >
+                  Cancel
+                </Button>
               </div>
               
               <div className="dropdown-options">
-                {getOptions().map((option) => (
+                {getOptions().map((option, index) => (
                   <div 
-                    key={option.value}
-                    className="dropdown-option"
-                    onClick={() => handleSelectReference(option)}
+                    key={`${option.value}-${index}`}
+                    className={`dropdown-option ${option.isCustom ? 'custom-option' : ''}`}
+                    onClick={() => option.isCustom ? handleApplyCustomValue() : handleSelectReference(option)}
                   >
-                    <div className="option-label">{option.label}</div>
-                    {option.type === 'COLOR' && option.color && (
-                      <div 
-                        className="color-preview"
-                        style={{ 
-                          width: '16px',
-                          height: '16px',
-                          borderRadius: '3px',
-                          border: '1px solid #ddd',
-                          background: `rgba(${option.color.r}, ${option.color.g}, ${option.color.b}, ${option.color.a})`
-                        }} 
-                      ></div>
-                    )}
+                    <div className="option-content">
+                      <div className="option-label">
+                        {option.color && (
+                          <div 
+                            className="color-preview" 
+                            style={{ 
+                              backgroundColor: `rgba(${option.color.r}, ${option.color.g}, ${option.color.b}, ${option.color.a || 1})`,
+                              width: '12px',
+                              height: '12px',
+                              borderRadius: '2px',
+                              marginRight: '5px',
+                              display: 'inline-block',
+                              verticalAlign: 'middle'
+                            }}
+                          />
+                        )}
+                        <span>{option.label}</span>
+                      </div>
+                      
+                      {/* Show reference chain preview for VARIABLE_ALIAS type */}
+                      {option.original && option.original.valueType === 'VARIABLE_ALIAS' && option.original.referencedVariable && (
+                        <div className="option-reference-preview">
+                          <ReferenceChainPreview 
+                            variableId={option.original.referencedVariable.id}
+                            allVariables={allVariables}
+                            showColorPreview={true}
+                            className="in-dropdown"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

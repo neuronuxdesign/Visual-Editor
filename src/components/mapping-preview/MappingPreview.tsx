@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './MappingPreview.scss';
+import Button from '../../ui/Button';
 
 // Import types
 import { RGBAValue, Variable } from '../../types/common';
@@ -117,39 +118,41 @@ const MappingPreview: React.FC<MappingPreviewProps> = ({
 
   return (
     <>
-      <button className="action-button" onClick={handleShowPreview}>
+      <Button variant="primary" onClick={handleShowPreview}>
         Mapping preview
-      </button>
+      </Button>
 
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
               <h2>CSS Variables Mapping</h2>
-              <button
+              <Button
+                variant="primary" 
+                danger
                 className="close-button"
                 onClick={() => setShowModal(false)}
               >
                 ×
-              </button>
+              </Button>
             </div>
             <div className="modal-content">
               <div className="css-preview">
                 <pre>{cssVariables}</pre>
               </div>
               <div className="modal-actions">
-                <button
-                  className="action-button"
+                <Button
+                  variant="primary"
                   onClick={handleDownloadCSS}
                 >
                   Download CSS
-                </button>
-                <button
-                  className="action-button secondary"
+                </Button>
+                <Button
+                  variant="outlined"
                   onClick={() => setShowModal(false)}
                 >
                   Close
-                </button>
+                </Button>
               </div>
             </div>
           </div>

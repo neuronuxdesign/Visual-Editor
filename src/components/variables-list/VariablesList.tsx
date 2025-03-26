@@ -5,9 +5,11 @@ import ColorSelector from '../color-selector/ColorSelector';
 import VariableDropdown from '../variable-dropdown/VariableDropdown';
 import NewVariableCreator from '../new-variable-creator/NewVariableCreator';
 import LinkedVariableDetails from '../linked-variable-details/LinkedVariableDetails';
+import ColorPreview from '../color-preview/ColorPreview';
+import { resolveVariableReferences, extractColorFromVariable } from '../../utils/variableUtils/resolveVariableReferences';
 import './VariablesList.scss';
-import { Variable, RGBAValue, FigmaVariablesData } from '../../pages/VisualEditor/types';
-import { TreeNode, SelectOption } from '../../pages/VisualEditor/types';
+import { Variable, RGBAValue, FigmaVariablesData, TreeNode, SelectOption } from '../../pages/VisualEditor/types';
+import Button from '../../ui/Button';
 
 interface VariablesListProps {
   selectedNode: TreeNode;
@@ -147,12 +149,12 @@ const VariablesList: React.FC<VariablesListProps> = ({
 
       <div className="variables-table-header">
         {/* Move button here but keep NewVariableCreator component for the table */}
-        <button 
-          className="action-button create-variable-btn"
+        <Button 
+          variant="primary"
           onClick={() => setIsCreatingVariable(true)}
         >
           Create Variable
-        </button>
+        </Button>
 
         {/* Mode selector */}
         {availableModes.length > 0 && (
@@ -255,8 +257,38 @@ const VariablesList: React.FC<VariablesListProps> = ({
                     {modeVariable ? (
                       <>
                         {/* Special handling for VARIABLE_ALIAS type */}
-                        {modeVariable.rawValue.type === 'VARIABLE_ALIAS' && modeVariable.referencedVariable ? (
+                        {(modeVariable.valueType === 'VARIABLE_ALIAS' || 
+                          (modeVariable.rawValue && typeof modeVariable.rawValue === 'object' && 'type' in modeVariable.rawValue && modeVariable.rawValue.type === 'VARIABLE_ALIAS')) 
+                          && modeVariable.referencedVariable ? (
                           <div className="variable-alias-display">
+                            {/* Add a compact color preview for reference variables if they eventually point to a color */}
+                            {(() => {
+                              // Use the same resolveVariableReferences and extractColorFromVariable functions
+                              // that are used in LinkedVariableDetails
+                              if (modeVariable.referencedVariable?.id) {
+                                const { finalVariable } = resolveVariableReferences(
+                                  modeVariable.referencedVariable.id,
+                                  'current',
+                                  allVariables
+                                );
+                                
+                                // If the final variable is a color, extract and show the preview
+                                if (finalVariable?.isColor) {
+                                  const colorValue = extractColorFromVariable(finalVariable);
+                                  if (colorValue) {
+                                    return (
+                                      <ColorPreview
+                                        color={colorValue}
+                                        size="small"
+                                        className="reference-chain-color-preview"
+                                        key={`ref-color-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}
+                                      />
+                                    );
+                                  }
+                                }
+                              }
+                              return null;
+                            })()}
                             <LinkedVariableDetails
                               variableData={modeVariable}
                               allVariables={allVariables}
@@ -264,6 +296,7 @@ const VariablesList: React.FC<VariablesListProps> = ({
                               handleSaveVariable={handleSaveVariable}
                               handleVariableValueChange={handleVariableValueChange}
                               onNavigateToReference={handleSelectNode}
+                              setEditingVariables={setEditingVariables}
                             />
                           </div>
                         ) : (
@@ -274,25 +307,13 @@ const VariablesList: React.FC<VariablesListProps> = ({
                               try {
                                 const colorValue = modeVariable.rawValue as RGBAValue;
                                 if (colorValue && 'r' in colorValue && 'g' in colorValue && 'b' in colorValue) {
-                                  const r = Math.round(colorValue.r * 255);
-                                  const g = Math.round(colorValue.g * 255);
-                                  const b = Math.round(colorValue.b * 255);
-                                  const a = colorValue.a || 1;
-
                                   return (
-                                    <div
-                                      className="color-preview"
-                                      style={{
-                                        backgroundColor: `rgba(${r}, ${g}, ${b}, ${a})`,
-                                        width: '16px',
-                                        height: '16px',
-                                        marginRight: '6px',
-                                        borderRadius: '3px',
-                                        border: '1px solid #ddd',
-                                        display: 'inline-block',
-                                        verticalAlign: 'middle'
-                                      }}
-                                      key={`color-preview-${modeVariable.id}-${modeVariable.modeId}-${r}-${g}-${b}-${uniqueId}`}
+                                    <ColorPreview
+                                      color={colorValue}
+                                      size="small"
+                                      showValue={modeVariable.valueType !== 'VARIABLE_ALIAS'}
+                                      className="variable-list-preview"
+                                      key={`color-preview-${modeVariable.id}-${modeVariable.modeId}-${colorValue.r}-${colorValue.g}-${colorValue.b}-${uniqueId}`}
                                     />
                                   );
                                 }
@@ -303,17 +324,10 @@ const VariablesList: React.FC<VariablesListProps> = ({
                               }
                             })()}
 
-                            {/* Show the variable value - skip for VARIABLE_ALIAS type */}
-                            {modeVariable.valueType !== 'VARIABLE_ALIAS' && (
-                              <span key={`value-${modeVariable.id}-${modeVariable.modeId}-${modeVariable.value}-${uniqueId}`}>
-                                {modeVariable.value}
-                              </span>
-                            )}
-
                             {/* Show edit button when not in edit mode */}
                             {modeVariable.id && !editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
-                              <button
-                                className="edit-mode-variable"
+                              <Button
+                                variant="primary"
                                 onClick={() => {
                                   setEditingVariables(prev => ({
                                     ...prev,
@@ -322,7 +336,7 @@ const VariablesList: React.FC<VariablesListProps> = ({
                                 }}
                               >
                                 Edit
-                              </button>
+                              </Button>
                             )}
 
                             {/* Show variable dropdown and save/cancel buttons when in edit mode */}
@@ -347,8 +361,8 @@ const VariablesList: React.FC<VariablesListProps> = ({
                                   />
                                 )}
                                 <div className="mode-buttons">
-                                  <button
-                                    className="mode-save-btn"
+                                  <Button
+                                    variant="primary"
                                     onClick={() => {
                                       // Get the most current version of this variable from allVariables
                                       if (modeVariable.id) {
@@ -378,13 +392,14 @@ const VariablesList: React.FC<VariablesListProps> = ({
                                     }}
                                   >
                                     Save
-                                  </button>
-                                  <button
-                                    className="mode-cancel-btn"
+                                  </Button>
+                                  <Button
+                                    variant="outlined"
+                                    danger
                                     onClick={() => handleCancelVariableChanges(modeVariable)}
                                   >
                                     Cancel
-                                  </button>
+                                  </Button>
                                 </div>
                               </div>
                             )}

@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import './LinkedVariableDetails.scss';
 import { Variable, RGBAValue } from '../../pages/VisualEditor/types';
 import { 
   resolveVariableReferences,
-  formatReferenceChain,
   extractColorFromVariable
 } from '../../utils/variableUtils/resolveVariableReferences';
+import ColorSelector from '../color-selector/ColorSelector';
+import VariableDropdown from '../variable-dropdown/VariableDropdown';
+import ReferenceChainPreview from '../reference-chain-preview/ReferenceChainPreview';
+import ColorPreview from '../color-preview/ColorPreview';
+import Button from '../../ui/Button';
 
 interface LinkedVariableDetailsProps {
   variableData: Variable;
@@ -14,9 +18,10 @@ interface LinkedVariableDetailsProps {
   handleSaveVariable: (variable: Variable) => Promise<void>;
   handleVariableValueChange?: (variable: Variable, newValue: string | RGBAValue, isReference?: boolean, refVariable?: Variable) => void;
   onNavigateToReference?: (variableId: string) => void;
-  currentFileId?: string; // Optional: current file ID for cross-file references
-  allFilesVariables?: Record<string, Variable[]>; // Optional: variables from all files
-  fileNames?: Record<string, string>; // Optional: map of file IDs to names
+  setEditingVariables?: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  currentFileId?: string;
+  allFilesVariables?: Record<string, Variable[]>;
+  fileNames?: Record<string, string>;
 }
 
 const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
@@ -26,13 +31,11 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
   handleSaveVariable,
   handleVariableValueChange,
   onNavigateToReference,
-  currentFileId = 'current', // Default file ID
-  allFilesVariables = {}, // Default empty object
-  fileNames = {} // Default empty object
+  setEditingVariables,
+  currentFileId = 'current',
+  allFilesVariables = {},
+  fileNames = {}
 }) => {
-  // State to store the expanded state of the reference chain
-  const [isReferenceChainExpanded, setIsReferenceChainExpanded] = useState(false);
-
   if (!variableData.referencedVariable?.id) {
     return (
       <div className="linked-variable-details">
@@ -44,7 +47,7 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
   }
 
   // Resolve the reference chain
-  const { finalVariable, referenceChain, success } = resolveVariableReferences(
+  const { finalVariable, success } = resolveVariableReferences(
     variableData.referencedVariable.id,
     currentFileId,
     allVariables,
@@ -56,28 +59,112 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
   const colorValue = extractColorFromVariable(finalVariable);
   
   // Generate color preview element if available
-  let colorPreview = null;
+  let colorPreviewElement = null;
   if (colorValue) {
-    const { r, g, b, a } = colorValue;
-    colorPreview = (
-      <div
-        className="color-preview"
-        style={{
-          backgroundColor: `rgba(${r}, ${g}, ${b}, ${a})`,
-          width: '24px',
-          height: '24px',
-          borderRadius: '4px',
-          border: '1px solid #ddd',
-          display: 'inline-block',
-          marginRight: '8px',
-          verticalAlign: 'middle'
-        }}
+    colorPreviewElement = (
+      <ColorPreview 
+        color={colorValue} 
+        size="large"
+        className="variable-color-preview"
       />
     );
   }
 
-  // Format the reference chain for display
-  const formattedReferenceChain = formatReferenceChain(referenceChain);
+  // Function to enable edit mode
+  const enableEditMode = () => {
+    if (!variableData.id) {
+      console.error('Cannot enable edit mode: variable ID is missing');
+      return;
+    }
+    
+    // Get the mode ID or use an empty string if it's undefined
+    const modeId = variableData.modeId || '';
+    const editKey = `${variableData.id}-${modeId}`;
+    
+    console.log('EDIT BUTTON CLICKED', {
+      variableId: variableData.id,
+      modeId: modeId,
+      editKey: editKey,
+      variable: variableData,
+      currentEditingState: editingVariables
+    });
+    
+    // Check if setEditingVariables is available
+    if (!setEditingVariables) {
+      console.error('Cannot enable edit mode: setEditingVariables function is missing');
+      return;
+    }
+    
+    // Set the editing state for this variable
+    setEditingVariables(prev => {
+      console.log('Setting edit state with key:', editKey);
+      const newState = {...prev};
+      newState[editKey] = true;
+      
+      console.log('Updated editing state:', {
+        previous: prev, 
+        newKey: editKey, 
+        newState: newState
+      });
+      
+      return newState;
+    });
+  };
+  
+  // Function to disable edit mode
+  const disableEditMode = () => {
+    if (!variableData.id) {
+      console.error('Cannot disable edit mode: variable ID is missing');
+      return;
+    }
+    
+    // Get the mode ID or use an empty string if it's undefined
+    const modeId = variableData.modeId || '';
+    const editKey = `${variableData.id}-${modeId}`;
+    
+    console.log('CANCEL BUTTON CLICKED', {
+      variableId: variableData.id,
+      modeId: modeId,
+      editKey: editKey,
+      currentEditingState: editingVariables
+    });
+    
+    // Check if setEditingVariables is available
+    if (!setEditingVariables) {
+      console.error('Cannot disable edit mode: setEditingVariables function is missing');
+      return;
+    }
+    
+    // Set the editing state for this variable
+    setEditingVariables(prev => {
+      console.log('Removing edit state with key:', editKey);
+      const newState = {...prev};
+      newState[editKey] = false;
+      
+      console.log('Updated editing state after cancel:', {
+        previous: prev, 
+        newKey: editKey, 
+        newState: newState,
+        allEditingKeys: Object.keys(newState)
+      });
+      
+      return newState;
+    });
+  };
+  
+  // Check if in edit mode
+  const editKey = variableData.id ? `${variableData.id}-${variableData.modeId || ''}` : '';
+  const isEditing = editKey && editingVariables && editingVariables[editKey];
+  
+  console.log('Rendering LinkedVariableDetails', {
+    variableId: variableData.id,
+    modeId: variableData.modeId,
+    editKey: editKey,
+    isEditing: isEditing,
+    editingVariables: editingVariables,
+    editStateForThisKey: editingVariables ? editingVariables[editKey] : undefined,
+    allEditingKeys: editingVariables ? Object.keys(editingVariables) : []
+  });
 
   return (
     <div className="linked-variable-details">
@@ -106,7 +193,7 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
             <div className="reference-chain">
               {success && finalVariable ? (
                 <div className="reference-display">
-                  {colorPreview}
+                  {colorPreviewElement}
                   <button
                     className="reference-var-button"
                     onClick={() => {
@@ -126,74 +213,98 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
           </div>
         </div>
         
-        {/* Reference chain display */}
+        {/* Reference chain display - Always visible, no toggle */}
         <div className="property-row">
-          <div className="property-label">Chain:</div>
+          <div className="property-label">Reference Chain:</div>
           <div className="property-value">
-            <div className="reference-chain-container">
-              <div className="reference-chain-summary" onClick={() => setIsReferenceChainExpanded(!isReferenceChainExpanded)}>
-                <span className="reference-chain-toggle">{isReferenceChainExpanded ? '▼' : '►'}</span>
-                <span className="reference-chain-text">{formattedReferenceChain}</span>
+            <div className="reference-chain-section">
+              <ReferenceChainPreview
+                variableId={variableData.referencedVariable.id}
+                allVariables={allVariables}
+                showColorPreview={true}
+                className=""
+              />
+            </div>
+          </div>
+        </div>
+        
+        {/* Edit Controls */}
+        <div className="reference-controls">
+          {/* Show edit button when not in edit mode */}
+          {!isEditing && (
+            <Button 
+              variant="primary"
+              onClick={() => {
+                console.log("Edit button directly clicked - isEditing: ", isEditing, " editKey: ", editKey);
+                // Additional check to see if the variable is already being edited
+                if (editingVariables && editKey in editingVariables) {
+                  console.log("Variable already has an entry in editingVariables: ", editingVariables[editKey]);
+                }
+                enableEditMode();
+              }}
+            >
+              Edit
+            </Button>
+          )}
+          
+          {/* Show edit controls when in edit mode */}
+          {isEditing && handleVariableValueChange && (
+            <div className="reference-edit-controls">
+              <div className="selector-container">
+                {variableData.isColor ? (
+                  <div className="color-selector">
+                    <ColorSelector
+                      variable={variableData}
+                      allVariables={allVariables}
+                      onValueChange={handleVariableValueChange}
+                      valueOnly={false}
+                    />
+                  </div>
+                ) : (
+                  <div className="variable-selector">
+                    <VariableDropdown
+                      variable={variableData}
+                      allVariables={allVariables}
+                      onValueChange={handleVariableValueChange}
+                      valueOnly={false}
+                      onSave={(variable) => handleSaveVariable(variable)}
+                    />
+                  </div>
+                )}
               </div>
               
-              {isReferenceChainExpanded && (
-                <div className="reference-chain-details">
-                  {referenceChain.map((step, index) => (
-                    <div key={`ref-${index}`} className="reference-chain-step">
-                      <div className="step-number">{index + 1}.</div>
-                      <div className="step-content">
-                        {step.file.fileName !== "Current File" && (
-                          <div className="step-file">File: {step.file.fileName}</div>
-                        )}
-                        <div className="step-collection">Collection: {step.collection.collectionName}</div>
-                        <div className="step-variable">
-                          Variable: <span className="variable-name">{step.variable.name}</span>
-                          {onNavigateToReference && step.variable.id && (
-                            <button 
-                              className="navigate-to-variable"
-                              onClick={() => onNavigateToReference(step.variable.id as string)}
-                            >
-                              View
-                            </button>
-                          )}
-                        </div>
-                        {step.isLast ? (
-                          <div className="step-final">Final Value: {step.variable.value}</div>
-                        ) : (
-                          <div className="step-arrow">↓</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="edit-actions">
+                <Button 
+                  variant="primary"
+                  onClick={() => {
+                    console.log("Save button clicked - isEditing: ", isEditing, " editKey: ", editKey);
+                    handleSaveVariable(variableData)
+                      .then(() => {
+                        console.log("Save completed successfully, disabling edit mode");
+                        disableEditMode();
+                      })
+                      .catch(err => {
+                        console.error("Error saving variable:", err);
+                      });
+                  }}
+                >
+                  Save
+                </Button>
+                <Button 
+                  variant="outlined"
+                  danger
+                  onClick={() => {
+                    console.log("Cancel button directly clicked - isEditing: ", isEditing, " editKey: ", editKey);
+                    disableEditMode();
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
-
-        {finalVariable && (
-          <div className="property-row">
-            <div className="property-label">Resolved Value:</div>
-            <div className="property-value">
-              {finalVariable.value}
-            </div>
-          </div>
-        )}
       </div>
-
-      {variableData.id && editingVariables[`${variableData.id}-${variableData.modeId}`] && (
-        <div className="property-row">
-          <div className="property-label"></div>
-          <div className="property-value">
-            <button 
-              className="save-variable-btn"
-              onClick={() => handleSaveVariable(variableData)}
-            >
-              Save Changes
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

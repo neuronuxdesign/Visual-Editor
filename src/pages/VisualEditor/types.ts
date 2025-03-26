@@ -54,6 +54,7 @@ export interface FigmaVariablesData {
 
 export interface Variable {
   id?: string;
+  fileId?: string;
   name: string;
   value: string;
   rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
@@ -67,6 +68,7 @@ export interface Variable {
     name: string;
     finalValue: unknown;
     finalValueType: string;
+    fileId?: string;
   };
   description?: string;
 }

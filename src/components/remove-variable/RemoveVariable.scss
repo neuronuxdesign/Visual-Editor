@@ -1,0 +1,16 @@
+.modal-overlay {
+  // ... existing styles ...
+  
+  .delete-confirmation-modal {
+    // ... existing styles ...
+    
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
+      
+      // Remove button-specific styles
+    }
+  }
+} 

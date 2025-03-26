@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import figmaApi from '../../utils/figmaApi';
 import figmaConfig from '../../utils/figmaConfig';
+import Button from '../../ui/Button';
 
 // Import types
 import { Variable } from '../../types/common';
@@ -141,13 +142,14 @@ const RemoveVariable: React.FC<RemoveVariableProps> = ({
 
   return (
     <>
-      <button 
-        className="delete-variable-btn"
+      <Button 
+        variant="primary"
+        danger
         onClick={() => openDeleteModal(variable)}
         aria-label="Delete variable"
       >
         Delete
-      </button>
+      </Button>
 
       {/* Delete confirmation modal */}
       {showDeleteModal && variableToDelete && (
@@ -157,18 +159,20 @@ const RemoveVariable: React.FC<RemoveVariableProps> = ({
             <p>Are you sure you want to delete the variable "{variableToDelete.name}"?</p>
             <p className="warning">This action cannot be undone.</p>
             <div className="modal-actions">
-              <button 
-                className="cancel-btn"
+              <Button 
+                variant="outlined"
+                danger
                 onClick={cancelDelete}
               >
                 Cancel
-              </button>
-              <button 
-                className="confirm-delete-btn"
+              </Button>
+              <Button 
+                variant="primary"
+                danger
                 onClick={confirmDelete}
               >
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
         </div>

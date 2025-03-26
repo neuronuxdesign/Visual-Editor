@@ -44,6 +44,43 @@
       
       .value-with-reference {
         color: #1976d2;
+        flex-direction: column;
+        align-items: flex-start;
+        
+        .simplified-reference {
+          display: flex;
+          align-items: center;
+          width: 100%;
+        }
+        
+        .dropdown-reference-chain {
+          width: 100%;
+          margin-top: 4px;
+          
+          &.collapsed {
+            .reference-chain-preview {
+              .reference-final-value {
+                display: none;
+              }
+              
+              .reference-chain-text {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 10px;
+                color: #666;
+                padding: 2px 4px;
+                background-color: #f0f0f0;
+                border-radius: 2px;
+                margin-bottom: 0;
+              }
+            }
+            
+            &.in-display {
+              max-width: 100%;
+            }
+          }
+        }
       }
     }
     
@@ -88,24 +125,12 @@
     
     .dropdown-custom {
       display: flex;
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
       
       input {
         flex-grow: 1;
-        margin-right: 8px;
-      }
-      
-      button {
-        padding: 4px 8px;
-        background-color: #1976d2;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        
-        &:hover {
-          background-color: #1565c0;
-        }
       }
     }
     
@@ -115,8 +140,7 @@
       
       .dropdown-option {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
         padding: 8px;
         cursor: pointer;
         
@@ -125,10 +149,39 @@
         }
         
         .option-label {
-          width: calc(100% - 24px);
+          display: flex;
+          align-items: center;
+          width: 100%;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+        
+        .option-reference-preview {
+          margin-top: 4px;
+          padding-left: 4px;
+          border-left: 2px solid #e0e0e0;
+          
+          .reference-chain-preview {
+            &.in-dropdown {
+              max-width: 100%;
+              font-size: 11px;
+              
+              .reference-chain-text {
+                padding: 4px 6px;
+                margin-bottom: 4px;
+              }
+              
+              .reference-final-value {
+                padding: 4px 6px;
+              }
+            }
+          }
+        }
+        
+        &.custom-option {
+          font-style: italic;
+          color: #555;
         }
       }
     }

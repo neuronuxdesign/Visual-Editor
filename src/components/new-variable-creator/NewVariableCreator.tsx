@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './NewVariableCreator.scss';
 import ColorSelector from '../color-selector/ColorSelector';
+import figmaApi from '../../utils/figmaApi';
+import figmaConfig from '../../utils/figmaConfig';
+import Button from '../../ui/Button';
 
 // Import types from the central types file
 import { 
@@ -517,54 +520,43 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
         // Other modes will be left undefined if not explicitly set and not selected
       }
       
+      // Create a temporary ID for the new variable
+      const tempVariableId = `temp-variable-${Date.now()}`;
+      
       // Prepare the payload for the Figma API
       const payload = {
-        action: 'CREATE',
-        collection: selectedCollection.id,
-        data: {
-          name: newVariable.name,
-          variableCollection: selectedCollection.id,
-          resolvedType: newVariable.valueType,
-          valuesByMode
-        }
+        variables: [
+          {
+            action: 'CREATE',
+            id: tempVariableId, // Use the temporary ID 
+            name: newVariable.name,
+            resolvedType: newVariable.valueType,
+            variableCollectionId: selectedCollection.id,
+          }
+        ],
+        variableModeValues: Object.entries(valuesByMode).map(([modeId, value]) => ({
+          variableId: tempVariableId, // Use the same temporary ID
+          modeId,
+          value
+        }))
       };
       
-      // Send to Figma
-      const response = await fetch('/api/figma/variables', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to save variable: ${response.statusText}`);
+      // Get the file ID from config
+      const fileId = figmaConfig.getStoredFigmaFileId();
+      if (!fileId) {
+        throw new Error('No Figma file ID configured. Please configure a file ID first.');
       }
       
-      // Get the updated variables from Figma
-      const updatedVariables = await response.json();
+      // Use the figmaApi utility to send to Figma
+      await figmaApi.postVariables(fileId, payload);
       
-      // Find the ID of the newly created variable
-      let newVariableId = '';
+      // After creating the variable, load fresh data instead of relying on the creation response
+      // This ensures we have complete and properly formatted data
+      console.log('[INFO] Variable created successfully, fetching fresh data...');
+      const freshVariablesData = await figmaApi.getLocalVariables(fileId);
       
-      if (updatedVariables && updatedVariables.meta && updatedVariables.meta.variables) {
-        for (const [id, variable] of Object.entries(updatedVariables.meta.variables)) {
-          const varObj = variable as Record<string, unknown>;
-          if (varObj.name === newVariable.name &&
-            varObj.variableCollectionId === selectedCollection.id) {
-            newVariableId = id;
-            break;
-          }
-        }
-      }
-      
-      if (!newVariableId) {
-        console.warn('Could not find new variable ID in response');
-      }
-      
-      // Process the updated variables
-      onVariablesUpdated(updatedVariables);
+      // Process the updated variables with the freshly loaded data
+      onVariablesUpdated(freshVariablesData);
       
       // Clear the new variable form
       setNewVariable(null);
@@ -581,12 +573,12 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
   return (
     <>
       {selectedNodeId && !hideButton && (
-        <button 
-          className="action-button create-variable-btn"
+        <Button 
+          variant="primary"
           onClick={handleCreateVariable}
         >
           Create Variable
-        </button>
+        </Button>
       )}
       
       {newVariable && (
@@ -682,18 +674,19 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
           {/* Actions cell with Save/Cancel buttons */}
           <div className="variable-cell variable-actions-cell">
             <div className="variable-actions">
-              <button
-                className="save-variable-btn"
+              <Button
+                variant="primary"
                 onClick={handleSaveNewVariable}
               >
                 Save
-              </button>
-              <button
-                className="cancel-variable-btn"
+              </Button>
+              <Button
+                variant="outlined"
+                danger
                 onClick={handleCancelNewVariable}
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -1,0 +1,26 @@
+.color-preview-container {
+  display: inline-flex;
+  align-items: center;
+  
+  &.small .rgba-value {
+    font-size: 12px;
+  }
+  
+  &.medium .rgba-value {
+    font-size: 14px;
+  }
+  
+  &.large .rgba-value {
+    font-size: 16px;
+  }
+  
+  .color-preview {
+    flex-shrink: 0;
+  }
+  
+  .rgba-value {
+    color: #333;
+    font-family: monospace;
+    white-space: nowrap;
+  }
+} 

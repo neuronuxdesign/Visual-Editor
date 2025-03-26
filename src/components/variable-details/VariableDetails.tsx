@@ -1,5 +1,6 @@
 import React, { useId } from 'react';
 import './VariableDetails.scss';
+import Button from '../../ui/Button';
 
 // Import components
 import ColorSelector from '../color-selector/ColorSelector';
@@ -105,12 +106,12 @@ const VariableDetails: React.FC<VariableDetailsProps> = ({
         <div className="property-row">
           <div className="property-label"></div>
           <div className="property-value">
-            <button 
-              className="save-variable-btn"
+            <Button 
+              variant="primary"
               onClick={() => handleSaveVariable(variableData)}
             >
               Save Changes
-            </button>
+            </Button>
           </div>
         </div>
       )}
