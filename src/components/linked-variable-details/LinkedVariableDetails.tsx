@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './LinkedVariableDetails.scss';
 import { Variable, RGBAValue } from '../../pages/VisualEditor/types';
 import { 
@@ -10,6 +10,7 @@ import VariableDropdown from '../variable-dropdown/VariableDropdown';
 import ReferenceChainPreview from '../reference-chain-preview/ReferenceChainPreview';
 import ColorPreview from '../color-preview/ColorPreview';
 import Button from '../../ui/Button';
+import figmaConfig from '../../utils/figmaConfig';
 
 interface LinkedVariableDetailsProps {
   variableData: Variable;
@@ -36,6 +37,12 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
   allFilesVariables = {},
   fileNames = {}
 }) => {
+  // Add this line to check if edits are allowed
+  const isEditAllowed = figmaConfig.isManualFileIdAllowed();
+  const editDisabledMessage = !isEditAllowed 
+    ? "Editing variables is not allowed in this space" 
+    : "";
+
   if (!variableData.referencedVariable?.id) {
     return (
       <div className="linked-variable-details">
@@ -72,6 +79,12 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
 
   // Function to enable edit mode
   const enableEditMode = () => {
+    // Check if editing is allowed in this space
+    if (!isEditAllowed) {
+      console.log("Edit not allowed in this space");
+      return;
+    }
+    
     if (!variableData.id) {
       console.error('Cannot enable edit mode: variable ID is missing');
       return;
@@ -214,7 +227,8 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
         </div>
         
         {/* Reference chain display - Always visible, no toggle */}
-        <div className="property-row">
+        <div className="property-row" style={
+          { flexDirection: "column" }}>
           <div className="property-label">Reference Chain:</div>
           <div className="property-value">
             <div className="reference-chain-section">
@@ -287,6 +301,8 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
                         console.error("Error saving variable:", err);
                       });
                   }}
+                  disabled={!isEditAllowed}
+                  title={editDisabledMessage}
                 >
                   Save
                 </Button>

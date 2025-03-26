@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './NewVariableCreator.scss';
 import ColorSelector from '../color-selector/ColorSelector';
-import figmaApi from '../../utils/figmaApi';
-import figmaConfig from '../../utils/figmaConfig';
 import Button from '../../ui/Button';
+import figmaConfig from '../../utils/figmaConfig';
+import figmaApi from '../../utils/figmaApi';
 
 // Import types from the central types file
 import { 
@@ -59,6 +59,15 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
 }) => {
   const [newVariable, setNewVariable] = useState<Variable | null>(null);
   const [newVariableModeValues, setNewVariableModeValues] = useState<{ [modeId: string]: unknown }>({});
+
+  // Add this check for whether editing is allowed
+  const isEditAllowed = figmaConfig.isManualFileIdAllowed();
+  const editDisabledMessage = !isEditAllowed 
+    ? "Creating variables is not allowed in this space" 
+    : "";
+
+  // Add a check to determine if the save button should be disabled
+  const isSaveButtonDisabled = !newVariable || !newVariable.name.trim();
 
   useEffect(() => {
     if (showRow && !newVariable && selectedNodeId) {
@@ -573,9 +582,11 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
   return (
     <>
       {selectedNodeId && !hideButton && (
-        <Button 
+        <Button
           variant="primary"
           onClick={handleCreateVariable}
+          disabled={!isEditAllowed}
+          title={editDisabledMessage}
         >
           Create Variable
         </Button>
@@ -677,6 +688,8 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
               <Button
                 variant="primary"
                 onClick={handleSaveNewVariable}
+                disabled={isSaveButtonDisabled || !isEditAllowed}
+                title={isSaveButtonDisabled ? "Please fill all required fields" : editDisabledMessage}
               >
                 Save
               </Button>

@@ -10,6 +10,7 @@ import { resolveVariableReferences, extractColorFromVariable } from '../../utils
 import './VariablesList.scss';
 import { Variable, RGBAValue, FigmaVariablesData, TreeNode, SelectOption } from '../../pages/VisualEditor/types';
 import Button from '../../ui/Button';
+import figmaConfig from '../../utils/figmaConfig';
 
 interface VariablesListProps {
   selectedNode: TreeNode;
@@ -124,9 +125,34 @@ const VariablesList: React.FC<VariablesListProps> = ({
       }
     });
   } else {
-    // If no nested folders, just use the direct children
-    folderVariables = directChildVariables;
+    // If no nested folders, just use the direct children directly - but deduplicate
+    // Create a Map to deduplicate variables by ID
+    const uniqueVarsMap = new Map<string, Variable>();
+    
+    directChildVariables.forEach(variable => {
+      if (variable.id && !uniqueVarsMap.has(variable.id)) {
+        uniqueVarsMap.set(variable.id, variable);
+      }
+    });
+    
+    // Convert map back to array
+    folderVariables = Array.from(uniqueVarsMap.values());
   }
+
+  // Get unique variable IDs for display
+  // This ensures we only display one row per variable, regardless of how many modes it has
+  const uniqueVariableIds = new Set<string>();
+  folderVariables.forEach(v => {
+    if (v.id) uniqueVariableIds.add(v.id);
+  });
+  
+  // Convert to array and get one representative variable for each unique ID
+  const uniqueVariables = Array.from(uniqueVariableIds).map(id => {
+    // Find a representative variable for this ID
+    return folderVariables.find(v => v.id === id) || folderVariables[0];
+  }).filter(Boolean); // Remove any undefined entries
+
+  console.log(`Displaying ${uniqueVariables.length} unique variables from ${folderVariables.length} total variables`);
 
   // Add state to track if we're creating a new variable
   const [isCreatingVariable, setIsCreatingVariable] = useState(false);
@@ -139,6 +165,14 @@ const VariablesList: React.FC<VariablesListProps> = ({
       newVariableRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [isCreatingVariable]);
+
+  // Check if we're in a space that allows edits (only Test space)
+  const isEditAllowed = figmaConfig.isManualFileIdAllowed();
+  
+  // Add a comment explaining why edit is disabled in some spaces
+  const editDisabledMessage = !isEditAllowed 
+    ? "Editing variables is not allowed in this space" 
+    : "";
 
   return (
     <div className="folder-contents">
@@ -220,7 +254,7 @@ const VariablesList: React.FC<VariablesListProps> = ({
         </div>
 
         {/* Existing variables - grouped by unique variable ID */}
-        {folderVariables.map((variable) => {
+        {uniqueVariables.map((variable) => {
           // Generate a hash of all mode values for this variable to force re-render when any value changes
           const modeValuesHash = selectedModes.map(mode => {
             const modeVar = allVariables.find(v => v.id === variable.id && v.modeId === mode.modeId);
@@ -323,6 +357,27 @@ const VariablesList: React.FC<VariablesListProps> = ({
                                 return null;
                               }
                             })()}
+                            
+                            {/* Show float preview for FLOAT type variables */}
+                            {modeVariable.valueType === 'FLOAT' && modeVariable.rawValue && (() => {
+                              try {
+                                const floatValue = typeof modeVariable.rawValue === 'number' 
+                                  ? modeVariable.rawValue 
+                                  : parseFloat(String(modeVariable.rawValue));
+                                
+                                if (!isNaN(floatValue)) {
+                                  return (
+                                    <div className="float-preview" key={`float-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}>
+                                      <span className="float-value">{floatValue.toFixed(2)}</span>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              } catch (error) {
+                                console.error("Error rendering float preview:", error);
+                                return null;
+                              }
+                            })()}
 
                             {/* Show edit button when not in edit mode */}
                             {modeVariable.id && !editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
@@ -390,6 +445,8 @@ const VariablesList: React.FC<VariablesListProps> = ({
                                         handleSaveVariable(modeVariable);
                                       }
                                     }}
+                                    disabled={!isEditAllowed}
+                                    title={editDisabledMessage}
                                   >
                                     Save
                                   </Button>

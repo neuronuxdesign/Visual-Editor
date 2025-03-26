@@ -19,8 +19,17 @@ const RemoveVariable: React.FC<RemoveVariableProps> = ({
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [variableToDelete, setVariableToDelete] = useState<Variable | null>(null);
+  
+  // Check if we're in a space that allows edits (only Test space)
+  const isEditAllowed = figmaConfig.isManualFileIdAllowed();
 
   const handleDeleteVariable = async (variable: Variable) => {
+    // If editing is not allowed, don't proceed
+    if (!isEditAllowed) {
+      setErrorMessage('Deleting variables is not allowed in this space');
+      return;
+    }
+    
     if (!variable.id) {
       setErrorMessage('Cannot delete variable: missing ID');
       return;
@@ -123,6 +132,12 @@ const RemoveVariable: React.FC<RemoveVariableProps> = ({
   };
 
   const openDeleteModal = (variable: Variable) => {
+    // If editing is not allowed, don't open the modal
+    if (!isEditAllowed) {
+      setErrorMessage('Deleting variables is not allowed in this space');
+      return;
+    }
+    
     setVariableToDelete(variable);
     setShowDeleteModal(true);
   };
@@ -146,7 +161,9 @@ const RemoveVariable: React.FC<RemoveVariableProps> = ({
         variant="primary"
         danger
         onClick={() => openDeleteModal(variable)}
+        disabled={!isEditAllowed}
         aria-label="Delete variable"
+        title={!isEditAllowed ? "Deleting variables is not allowed in this space" : "Delete variable"}
       >
         Delete
       </Button>

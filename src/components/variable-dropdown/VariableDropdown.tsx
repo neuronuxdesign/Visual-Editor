@@ -225,6 +225,22 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
           />
         </div>
       );
+    } else if (variable.valueType === 'FLOAT') {
+      // Special display for FLOAT type
+      const floatValue = typeof variable.rawValue === 'number' 
+        ? variable.rawValue 
+        : parseFloat(String(variable.rawValue || '0'));
+        
+      if (!isNaN(floatValue)) {
+        return (
+          <div className="value-with-preview">
+            <span className="float-value-display">
+              {floatValue.toFixed(2)}
+            </span>
+          </div>
+        );
+      }
+      return <span>{lastAppliedValue || variable.value}</span>;
     } else {
       return <span>{lastAppliedValue || variable.value}</span>;
     }

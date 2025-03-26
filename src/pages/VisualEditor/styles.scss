@@ -1661,4 +1661,61 @@ input[type="text"] {
   gap: 8px;
   margin-top: 4px;
   width: 100%;
+}
+
+/* Space debug styles */
+.space-debug-info {
+  margin: 10px 0;
+  
+  .debug-toggle {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    
+    &:hover {
+      background-color: #e0e0e0;
+    }
+  }
+  
+  .debug-container {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    
+    h3 {
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .debug-table {
+      width: 100%;
+      font-size: 12px;
+      
+      tr {
+        &:nth-child(even) {
+          background-color: #f0f0f0;
+        }
+      }
+      
+      td {
+        padding: 4px 8px;
+        
+        &.debug-key {
+          font-weight: 600;
+          width: 40%;
+        }
+        
+        &.debug-value {
+          width: 60%;
+          font-family: monospace;
+        }
+      }
+    }
+  }
 } 
