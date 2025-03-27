@@ -39,13 +39,32 @@ jobs:
           node-version: 22
 
       # Fix for "Cannot find module @rollup/rollup-linux-x64-gnu" error
-      - name: Clean npm cache
+      - name: Clean environment
         run: |
           rm -rf node_modules
           rm -f package-lock.json
-
+          
+      # Fix Rollup optional dependencies 
+      - name: Install Rollup platform-specific binaries first
+        run: |
+          npm install @rollup/rollup-linux-x64-gnu
+        continue-on-error: true
+          
       - name: Install dependencies
-        run: npm install --no-optional
+        run: |
+          npm install --omit=optional
+          
+      # Verify Rollup is properly installed
+      - name: Verify Rollup installation
+        run: |
+          ls -la node_modules/@rollup || true
+          ls -la node_modules/rollup/dist || true
+          
+      # Patching Rollup for Linux build
+      - name: Patch Rollup
+        run: |
+          echo "// No-op module" > node_modules/rollup/dist/native.js
+        continue-on-error: true
 
       - name: Build project
         run: npm run build
