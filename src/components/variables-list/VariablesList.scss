@@ -1,0 +1,413 @@
+/* VariablesList styles */
+.folder-contents {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  
+  h2 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  
+  .folder-description {
+    color: #666;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  
+  .variables-table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    
+    .mode-selector {
+      display: flex;
+      align-items: center;
+      
+      label {
+        margin-right: 8px;
+        font-weight: 500;
+      }
+      
+      .mode-multiselect {
+        width: 300px;
+      }
+    }
+  }
+  
+  /* Table wrapper contains both header and scrollable content */
+  .variables-table-wrapper {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    max-height: calc(100vh - 530px); /* Prevent growing too large */
+  }
+  
+  .variables-table {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    
+    .variables-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: var(--color-background);
+      border-bottom: 1px solid var(--color-border);
+      height: 40px;
+      min-height: 40px;
+      font-weight: 600;
+      display: flex;
+    }
+
+    .variables-rows-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: auto; /* Use auto instead of scroll for better appearance */
+      position: relative;
+    }
+
+    .variables-row {
+      display: flex;
+      width: max-content; /* Ensure it expands to content width */
+      min-width: 100%;
+      position: relative;
+      align-items: stretch;
+      border-bottom: 1px solid #e0e0e0;
+      min-height: 50px;
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      &:hover {
+        background-color: #f9f9f9;
+      }
+    }
+
+    .header-scrollable-area,
+    .row-scrollable-area {
+      display: flex;
+      /* Allow the scrollable area to grow naturally based on content */
+    }
+
+    .variable-cell {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--color-border);
+      min-height: 60px;
+      
+      &.variable-info-cell {
+        width: 300px;
+        min-width: 300px;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background-color: var(--color-background);
+        
+        .variable-info-content {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          
+          .variable-name {
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+        }
+      }
+      
+      &.variable-mode-value-cell {
+        flex: 0 0 300px;
+        min-width: 300px;
+        width: 300px;
+        word-break: break-word;
+        
+        &.active-mode {
+          background-color: rgba(0, 0, 0, 0.03);
+        }
+        
+        .mode-indicator {
+          color: var(--color-accent);
+          margin-left: 4px;
+        }
+      }
+      
+      &.variable-actions-cell {
+        width: 120px;
+        min-width: 120px;
+        position: sticky;
+        right: 0;
+        z-index: 2;
+        background-color: var(--color-background);
+        justify-content: center;
+      }
+    }
+  }
+  
+  .variable-cell {
+    padding: 8px 16px;
+    
+    &.variable-info-cell {
+      .variable-info-content {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        
+        .color-preview {
+          display: none; /* Hide color preview */
+        }
+        
+        .variable-name {
+          font-weight: 500;
+          width: 100%;
+        }
+        
+        .variable-name-input {
+          flex: 1;
+          margin-right: 10px;
+          font-weight: 500;
+          padding: 6px;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+        }
+      }
+    }
+    
+    &.variable-mode-value-cell {
+      display: grid;
+      gap: 16px;
+      padding: 8px;
+      min-width: 300px;
+      min-height: 50px;
+      
+      &.active-mode {
+        background-color: rgba(0, 0, 0, 0.02);
+      }
+      
+      /* Force hide all variable value spans that are siblings or children of variable-alias-display */
+      .variable-alias-display ~ span,
+      .variable-alias-display + span,
+      .variable-alias-display span[key*="value-"] {
+        display: none !important;
+      }
+      
+      /* Target the value span when VARIABLE_ALIAS is present */
+      div:has(.variable-alias-display) > span[key*="value-"] {
+        display: none !important;
+      }
+      
+      /* Hide the raw "Reference to" text that appears as the variable value */
+      .variable-alias-display {
+        /* Hide any direct text inside this container that doesn't have a class */
+        > span:not([class]) {
+          display: none;
+        }
+        
+        /* Add new styles for the color preview */
+        display: flex;
+        align-items: center;
+        
+        .reference-chain-color-preview {
+          margin-right: 8px;
+          flex-shrink: 0;
+        }
+        
+        /* Style for LinkedVariableDetails component inside table cells */
+        .linked-variable-details {
+          flex: 1;
+          padding: 0;
+          background-color: transparent;
+          border-radius: 0;
+          margin-bottom: 0;
+          
+          h2 {
+            display: none; /* Hide the title in table cells */
+          }
+          
+          .variable-properties {
+            gap: 4px;
+            
+            .property-row {
+              margin-bottom: 4px;
+              
+              &:first-child, &:nth-child(2), &:nth-child(3) {
+                display: none; /* Hide type, collection, and description rows */
+              }
+              
+              .property-label {
+                width: auto;
+                font-size: 12px;
+                margin-right: 4px;
+              }
+              
+              .reference-chain-container {
+                .reference-chain-summary {
+                  cursor: pointer;
+                  font-size: 11px;
+                  
+                  .reference-chain-text {
+                    font-family: monospace;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    max-width: 150px;
+                    display: inline-block;
+                    vertical-align: bottom;
+                  }
+                }
+              }
+            }
+          }
+          
+          /* Show references properly */
+          .property-row:nth-child(4) {
+            display: flex;
+            
+            .reference-display {
+              display: flex;
+              align-items: center;
+              
+              .color-preview {
+                display: inline-block !important;
+                width: 16px !important;
+                height: 16px !important;
+              }
+              
+              .reference-var-button {
+                font-size: 12px;
+                padding: 2px 8px;
+                border-radius: 3px;
+                background-color: #f0f8ff;
+                border: 1px solid #d0e0ff;
+                cursor: pointer;
+              }
+            }
+          }
+          
+          /* Ensure the reference chain and final value are visible */
+          .property-row:nth-child(5) {
+            display: flex;
+            
+            .reference-chain-section {
+              width: 100%;
+              
+              .reference-chain-preview {
+                width: 100%;
+                
+                .reference-chain-text {
+                  font-size: 11px;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  max-width: 95%;
+                }
+                
+                .reference-final-value {
+                  display: flex !important;
+                  margin-top: 4px;
+                  background-color: #f5f5f5;
+                  border-radius: 3px;
+                  padding: 3px 6px;
+                  border: 1px solid #eee;
+                  
+                  .color-value-display {
+                    display: flex !important;
+                  }
+                  
+                  .text-value-small {
+                    font-size: 12px;
+                    display: inline-block !important;
+                  }
+                }
+              }
+            }
+          }
+          
+          /* Hide resolved value in table cells */
+          .property-row:nth-child(6) {
+            display: none;
+          }
+          
+          /* Ensure save button is visible */
+          .property-row:last-child {
+            margin-top: 8px;
+            
+            .save-variable-btn {
+              padding: 3px 8px;
+              font-size: 12px;
+            }
+          }
+        }
+      }
+      
+      .no-value {
+        color: #999;
+        font-style: italic;
+        font-size: 0.85em;
+      }
+      
+      /* Button layout in variable cells */
+      .variable-edit-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+        
+        /* Style mode buttons container */
+        .mode-buttons {
+          display: flex;
+          gap: 8px;
+          margin-top: 8px;
+          
+          /* Ensure buttons don't overflow */
+          button {
+            flex: 1;
+            white-space: nowrap;
+            min-width: auto;
+            font-size: 12px; /* Smaller font size for action buttons */
+            padding: 6px 12px; /* Smaller padding for action buttons */
+          }
+        }
+      }
+    }
+  }
+}
+
+/* Add float preview styles */
+.float-preview {
+  display: flex;
+  align-items: center;
+  margin: 4px 0;
+  
+  .float-value {
+    font-family: monospace;
+    background-color: #f5f8fb;
+    border: 1px solid #e0e6ed;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 12px;
+    display: inline-block;
+    color: #0066cc;
+    font-weight: 500;
+  }
+}
+
+/* New variable row styles */
+.new-variable-row {
+  background-color: rgba(52, 152, 219, 0.05);
+  border-top: 1px solid #e0e0ff;
+} 

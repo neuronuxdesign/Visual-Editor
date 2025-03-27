@@ -1,0 +1,89 @@
+.new-variable-row {
+  background-color: #f7f9fc;
+  border-left: 3px solid #0066ff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* Updated variable info cell styles for the new layout */
+.new-variable-row .variable-info-cell {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 250px;
+  width: 250px;
+  
+  .variable-info-content {
+    width: 100%;
+    display: block;
+    margin-bottom: 8px;
+  }
+}
+
+.variable-name-input {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+
+  &:focus {
+    outline: none;
+    border-color: #0078ff;
+    box-shadow: 0 0 0 2px rgba(0, 120, 255, 0.1);
+  }
+}
+
+.variable-type-select {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 8px;
+  font-size: 14px;
+  background-color: white;
+  
+  &:focus {
+    outline: none;
+    border-color: #0078ff;
+  }
+}
+
+.variable-value-input {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100%;
+  background-color: white;
+  
+  &:focus {
+    outline: none;
+    border-color: #0078ff;
+    box-shadow: 0 0 0 2px rgba(0, 120, 255, 0.1);
+  }
+}
+
+/* Style buttons in Actions column */
+.new-variable-row .variable-actions-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+}
+
+.variable-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.new-variable-value-container {
+  width: 100%;
+}
+
+/* Ensure alignment with the table structure */
+.new-variable-row .variable-mode-value-cell {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+} 

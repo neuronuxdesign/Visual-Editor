@@ -1,15 +1,15 @@
 import React from 'react';
-import { TreeNode } from '../../types/tree';
+import { TreeViewProps } from './types';
 
 // TreeView component
-const TreeView: React.FC<{
-  nodes: TreeNode[];
-  level?: number;
-  onToggle?: (nodeId: string) => void;
-  onSelect?: (nodeId: string) => void;
-  selectedNodeId?: string;
-  className?: string;
-}> = ({ nodes, level = 0, onToggle, onSelect, selectedNodeId, className }) => {
+const TreeView: React.FC<TreeViewProps> = ({ 
+  nodes, 
+  level = 0, 
+  onToggle, 
+  onSelect, 
+  selectedNodeId, 
+  className 
+}) => {
   const handleToggle = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
     if (onToggle) {

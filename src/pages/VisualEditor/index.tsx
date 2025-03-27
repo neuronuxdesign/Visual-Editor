@@ -1,184 +1,37 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Select from 'react-select'
 import './styles.scss'
 import figmaApi from '../../utils/figmaApi'
 import figmaConfig from '../../utils/figmaConfig'
 import NeuronLogo from '../../assets/Neuron.svg'
-import TreeView from '../../components/TreeView'
-// Commenting out imports that conflict with local declarations - to be used in the refactoring process
-// import { TreeNode } from '../../types/tree'
-// import { FigmaVariable, FigmaVariableCollection, FigmaVariablesData, RGBAValue, VariableReference } from '../../types/figma'
-// import { Variable, SelectOption, VariableOption } from '../../types/variables'
-// import { hueToRgb, rgbToHue, getSaturation, getBrightness, hsvToRgb } from '../../utils/colorUtils'
-import { transformFigmaVariables, groupVariablesByCollection, isObjectEmpty, generateUniqueId } from '../../utils/general'
-// Import with renamed functions to avoid conflicts
-import { formatNonColorValue as utilFormatNonColorValue, formatVariableValue as utilFormatVariableValue, findVariableByValue as utilFindVariableByValue } from '../../utils/variableUtils'
+import TreeView from '../../components/tree-view'
+import Button from '../../ui/Button'
 
-/**
- * REFACTORING NOTICE
- * 
- * This file is in the process of being refactored to improve code organization.
- * We've started extracting components, types, and utility functions to separate files.
- * 
- * Currently, there are duplicate declarations between imports and local declarations.
- * To fix vite:react-babel errors like "Duplicate declaration", we need to:
- * 
- * 1. Comment out the conflicting imports or use different import names
- * 2. Gradually replace local functions with imported functions
- * 3. Remove local types and use the imported types
- * 
- * This is an ongoing process and should be completed incrementally to maintain
- * functionality while improving code structure.
- */
+// Import our types from the types file
+import { 
+  TreeNode, 
+  Variable, 
+  FigmaVariablesData, 
+  RGBAValue,
+  FigmaVariable,
+} from './types'
 
-// Define tree node structure for the sidebar
-interface TreeNode {
-  id: string;
-  name: string;
-  type: 'file' | 'folder';
-  children?: TreeNode[];
-  isExpanded?: boolean;
+// Add the import for formatNonColorValue
+import { formatNonColorValue as utilFormatNonColorValue } from './utils/variableUtils'
+import MappingPreview from '../../components/mapping-preview/MappingPreview';
+
+// Import our new components
+import VariablesList from '../../components/variables-list/VariablesList';
+import VariableDetails from '../../components/variable-details/VariableDetails';
+
+// Define the props interface
+interface VisualEditorProps {
+  selectedSpace: string;
 }
 
-// Create the initial tree structure
-const initialTree: TreeNode[] = [
-  {
-    id: 'root-1',
-    name: 'Colors',
-    type: 'folder',
-    isExpanded: true,
-    children: [
-      { id: 'colors-1', name: 'Primary', type: 'file' },
-      { id: 'colors-2', name: 'Secondary', type: 'file' },
-      { id: 'colors-3', name: 'Tertiary', type: 'file' },
-    ]
-  },
-  {
-    id: 'root-2',
-    name: 'Typography',
-    type: 'folder',
-    isExpanded: false,
-    children: [
-      { id: 'typography-1', name: 'Headings', type: 'file' },
-      { id: 'typography-2', name: 'Body', type: 'file' },
-      { id: 'typography-3', name: 'Links', type: 'file' },
-    ]
-  },
-  {
-    id: 'root-3',
-    name: 'Components',
-    type: 'folder',
-    isExpanded: false,
-    children: [
-      { id: 'components-1', name: 'Buttons', type: 'file' },
-      { id: 'components-2', name: 'Cards', type: 'file' },
-      { 
-        id: 'components-3', 
-        name: 'Navigation', 
-        type: 'folder',
-        isExpanded: false,
-        children: [
-          { id: 'nav-1', name: 'Menu', type: 'file' },
-          { id: 'nav-2', name: 'Tabs', type: 'file' },
-        ]
-      },
-    ]
-  }
-];
-
-/*
- * This is a custom tree view implementation. 
- * For a production application, consider using a dedicated tree view library like:
- * - react-treeview
- * - react-arborist
- * - @mui/lab TreeView
- * - react-complex-tree
- * 
- * Example implementation with react-complex-tree would look like:
- * 
- * import { Tree, TreeItem, StaticTreeDataProvider } from 'react-complex-tree';
- * import 'react-complex-tree/lib/style.css';
- * 
- * // Configure data provider
- * const dataProvider = new StaticTreeDataProvider(treeItems, dndOptions);
- * 
- * // Then in your component
- * <Tree
- *   treeId="visual-editor-tree"
- *   rootItem="root"
- *   dataProvider={dataProvider}
- *   renderItemTitle={({ title }) => <span>{title}</span>}
- *   renderItemArrow={({ item, context }) => (
- *     <span className={context.isExpanded ? 'expanded' : ''}>▶</span>
- *   )}
- * />
- */
-
-// TreeView component is now imported from src/components/TreeView
-
-// Define types for the variable.json structure
-interface RGBAValue {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
-
-interface FigmaVariable {
-  id: string;
-  name: string;
-  remote: boolean;
-  key: string;
-  variableCollectionId: string;
-  resolvedType: string;
-  description: string;
-  hiddenFromPublishing: boolean;
-  valuesByMode: Record<string, RGBAValue>;
-  scopes: string[];
-  codeSyntax?: Record<string, unknown>;
-}
-
-interface FigmaVariableCollection {
-  defaultModeId: string;
-  id: string;
-  name: string;
-  remote: boolean;
-  modes: Array<{
-    modeId: string;
-    name: string;
-  }>;
-  key: string;
-  hiddenFromPublishing: boolean;
-  variableIds: string[];
-}
-
-interface FigmaVariablesData {
-  status: number;
-  error: boolean;
-  meta: {
-    variableCollections: Record<string, FigmaVariableCollection>;
-    variables: Record<string, FigmaVariable>;
-  };
-}
-
-// Define types for UI state
-interface Variable {
-  id: string;
-  name: string;
-  value: string;
-  rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
-  modeId: string;
-  collectionName: string;
-  isColor: boolean;
-  valueType: string;
-  referencedVariable?: {
-    id: string;
-    collection: string;
-    name: string;
-    finalValue: unknown;
-    finalValueType: string;
-  };
-  description?: string;
+// Define what we expose via ref
+export interface VisualEditorRefHandle {
+  resetApiCallState: () => void;
 }
 
 // Define options for selectors
@@ -225,14 +78,15 @@ interface VariableReference {
   id: string;
 }
 
-// Helper function to check if a value is a variable reference
-const isVariableReference = (value: unknown): value is VariableReference => {
-  return value !== null && 
-         typeof value === 'object' && 
-         'type' in value && 
-         'id' in value && 
-         (value as {type: string}).type === 'VARIABLE_ALIAS';
-};
+// Define a type for dropdown options
+interface VariableOption {
+  label: string;
+  value: string;
+  original: Variable | null;
+  isCustom?: boolean;
+  type: string;
+  color?: RGBAValue;
+}
 
 // Helper function to format variable values based on their type
 const formatVariableValue = (
@@ -248,7 +102,7 @@ const formatVariableValue = (
     const b = Math.round(rgbaValue.b * 255);
     
     return {
-      displayValue: `${r}, ${g}, ${b}`,
+      displayValue: `${ r }, ${ g }, ${ b }`,
       type: 'color'
     };
   } else {
@@ -256,16 +110,6 @@ const formatVariableValue = (
     return utilFormatNonColorValue(value);
   }
 };
-
-// Define a type for dropdown options
-interface VariableOption {
-  label: string;
-  value: string;
-  original: Variable | null;
-  isCustom?: boolean;
-  type: string;
-  color?: RGBAValue;
-}
 
 // Helper function to find a variable that matches a given value
 const findVariableByValue = (
@@ -279,291 +123,315 @@ const findVariableByValue = (
   );
 };
 
-// VariableDropdown component for searchable value selection
-const VariableDropdown: React.FC<{
-  variable: Variable;
-  allVariables: Variable[];
-  onValueChange: (variable: Variable, newValue: string, isReference?: boolean, refVariable?: Variable) => void;
-}> = ({ variable, allVariables, onValueChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [customValue, setCustomValue] = useState(variable.value);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
-  // Update custom value when variable value changes
-  useEffect(() => {
-    setCustomValue(variable.value);
-  }, [variable.value]);
-  
-  // Generate options from all variables
-  const getOptions = (): VariableOption[] => {
-    // Start with a custom option
-    const options: { original: null; isCustom: boolean; label: string; type: any; value: unknown }[] = [
-      {
-        label: 'Custom Value',
-        value: customValue,
-        isCustom: true,
-        original: null,
-        type: variable.valueType
-      }
-    ];
-    
-    // Filter variables based on search term and compatible type
-    const compatibleVars = allVariables.filter(v => {
-      // Must match the variable type
-      if (v.valueType !== variable.valueType) return false;
-      
-      // Avoid referencing itself
-      if (v.id === variable.id && v.modeId === variable.modeId) return false;
-      
-      // If searching, must match search term
-      return !(searchTerm &&
-        !v.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !v.value.toLowerCase().includes(searchTerm.toLowerCase()));
-      
+// Add utility function to resolve variable reference chains
+const resolveVariableChain = (variableId: string, allVars: Variable[]): Variable | null => {
+  const visitedIds = new Set<string>();
 
-    });
-    
-    // Add compatible variables as options
-    compatibleVars.forEach(v => {
-      if (v.isColor && v.rawValue && typeof v.rawValue === 'object' && 'r' in v.rawValue) {
-        options.push({
-          isCustom: false,
-          label: `${v.name} (${v.collectionName})`,
-          value: v.value,
-          original: v,
-          type: 'color',
-          color: v.rawValue as RGBAValue
-        });
-      } else {
-        options.push({
-          isCustom: false,
-          label: `${v.name} (${v.collectionName})`,
-          value: v.value,
-          original: v,
-          type: v.valueType
-        });
-      }
-    });
-    
-    return options;
-  };
-  
-  // Handle applying custom value
-  const handleApplyCustomValue = () => {
-    // Check if this value matches an existing variable
-    const matchingVariable = findVariableByValue(customValue, variable.valueType, allVariables);
-    
-    if (matchingVariable && matchingVariable.id !== variable.id) {
-      // If value matches an existing variable, set it as a reference
-      onValueChange(variable, customValue, true, matchingVariable);
-    } else {
-      // Otherwise just update the value directly
-      onValueChange(variable, customValue);
+  // Recursive function to traverse the chain
+  const traverse = (id: string): Variable | null => {
+    // Guard against circular references
+    if (visitedIds.has(id)) return null;
+    visitedIds.add(id);
+
+    // Find the variable by ID
+    const variable = allVars.find(v => v.id === id);
+    if (!variable) return null;
+
+    // If this is not an alias, we're at the end of the chain
+    if (variable.valueType !== 'VARIABLE_ALIAS' || !variable.referencedVariable?.id) {
+      return variable;
     }
-    
-    setIsOpen(false);
-  };
-  
-  // Handle selecting a reference
-  const handleSelectReference = (option: VariableOption) => {
-    if (option.original) {
-      onValueChange(variable, option.value, true, option.original);
-    } else {
-      onValueChange(variable, option.value);
-    }
-    setIsOpen(false);
+
+    // Follow the reference to the next variable
+    const nextVariable = traverse(variable.referencedVariable.id);
+    return nextVariable || variable; // If can't resolve further, return the current variable
   };
 
-  // Determine what to display in the dropdown
-  const getDisplayValue = () => {
-    if (variable.referencedVariable) {
-      // Try to find the original variable name if it's missing
-      let refName = variable.referencedVariable.name;
-      if (!refName || refName === 'undefined') {
-        // Look for the variable by ID in allVariables
-        const originalVar = allVariables.find(v => v.id === variable.referencedVariable?.id);
-        refName = originalVar?.name || `Variable (${variable.referencedVariable.id.substring(0, 8)}...)`;
-      }
-      
-      return (
-        <div className="value-with-reference" title={`Variable ID: ${variable.referencedVariable.id}`}>
-          <span>→ {refName} ({variable.referencedVariable.collection})</span>
-          {variable.isColor && variable.referencedVariable.finalValueType === 'color' && (
-            <div 
-              className="color-preview" 
-              style={{ 
-                backgroundColor: `rgba(${variable.value}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`,
-                width: '16px',
-                height: '16px',
-                borderRadius: '3px',
-                border: '1px solid #ddd'
-              }}
-            />
-          )}
-        </div>
-      );
-    } else if (variable.isColor) {
-      return (
-        <div className="value-with-preview">
-          <span>{variable.value}</span>
-          <div 
-            className="color-preview" 
-            style={{ 
-              backgroundColor: `rgba(${variable.value}, ${(variable.rawValue as RGBAValue).a})`,
-              width: '16px',
-              height: '16px',
-              borderRadius: '3px',
-              border: '1px solid #ddd'
-            }}
-          />
-        </div>
-      );
-  } else {
-      return <span>{variable.value}</span>;
-    }
-  };
+  return traverse(variableId);
+};
+
+// Add the debug component
+const SpaceDebugInfo = ({ selectedSpace }: { selectedSpace: string }) => {
+  const [showDebug, setShowDebug] = useState(false);
+  const debugInfo = figmaConfig.debugEnvironmentVariables();
   
   return (
-    <div className="variable-dropdown" ref={dropdownRef}>
-      <div className="dropdown-display" onClick={() => setIsOpen(!isOpen)}>
-        <div className="value-display">
-          {getDisplayValue()}
-        </div>
-        <div className="dropdown-arrow">▼</div>
-      </div>
+    <div className="space-debug-info">
+      <button 
+        className="debug-toggle"
+        onClick={() => setShowDebug(!showDebug)}
+      >
+        {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
+      </button>
       
-      {isOpen && (
-        <div className="dropdown-menu">
-          <div className="dropdown-search">
-            <input 
-              type="text" 
-              placeholder="Search variables..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          
-          <div className="dropdown-custom">
-            <input 
-              type="text" 
-              placeholder="Enter custom value..." 
-              value={customValue}
-              onChange={(e) => setCustomValue(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-            />
-            <button onClick={handleApplyCustomValue}>Apply</button>
-          </div>
-          
-          <div className="dropdown-options">
-            {getOptions().map((option, index) => (
-              !option.isCustom && (
-                <div 
-                  key={index} 
-                  className="dropdown-option"
-                  onClick={() => handleSelectReference(option)}
-                >
-                  <div className="option-label">{option.label}</div>
-                  {option.type === 'color' && option.color && (
-                    <div 
-                      className="option-color-preview" 
-                      style={{ 
-                        backgroundColor: `rgba(${Math.round(option.color.r * 255)}, ${Math.round(option.color.g * 255)}, ${Math.round(option.color.b * 255)}, ${option.color.a})`,
-                        width: '16px',
-                        height: '16px',
-                        borderRadius: '3px',
-                        border: '1px solid #ddd'
-                      }} 
-                    />
-                  )}
-                </div>
-              )
-            ))}
-          </div>
+      {showDebug && (
+        <div className="debug-container">
+          <h3>Space Configuration Debug</h3>
+          <table className="debug-table">
+            <tbody>
+              {Object.entries(debugInfo).map(([key, value]) => (
+                <tr key={key}>
+                  <td className="debug-key">{key}</td>
+                  <td className="debug-value">{value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 };
 
-function VisualEditor() {
+// Convert to forwardRef component
+const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ selectedSpace }, ref) => {
   // figmaData is used in processVariableData and indirectly in UI rendering
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [figmaData, setFigmaData] = useState<FigmaVariablesData | null>(null);
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [variables, setVariables] = useState<Variable[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+  const [editingVariables, setEditingVariables] = useState<Record<string, boolean>>({});
   const [allVariables, setAllVariables] = useState<Variable[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<SelectOption>(brandOptions[0]);
+  
+  // Dynamic selector options that can be updated from API data
+  const [availableBrandOptions, setAvailableBrandOptions] = useState<SelectOption[]>(brandOptions);
+  const [availableThemeOptions, setAvailableThemeOptions] = useState<SelectOption[]>(themeOptions);
+  
+  // Selected values for each selector
+  const [selectedBrand, setSelectedBrand] = useState<SelectOption[]>([brandOptions[0]]);
+  const [selectedThemes, setSelectedThemes] = useState<SelectOption[]>([themeOptions[0]]);
   const [selectedGrade, setSelectedGrade] = useState<SelectOption>(gradeOptions[0]);
   const [selectedDevice, setSelectedDevice] = useState<SelectOption>(deviceOptions[0]);
-  const [selectedTheme, setSelectedTheme] = useState<SelectOption>(themeOptions[0]);
   const [selectedProject] = useState<SelectOption>(projectOptions[0]);
-  const [modeMapping, setModeMapping] = useState<{[modeId: string]: string}>({});
+  const [modeMapping, setModeMapping] = useState<{ [modeId: string]: string }>({});
+  // New state for tracking selected modes to display in the table
+  const [selectedModes, setSelectedModes] = useState<Array<{ modeId: string, name: string }>>([]);
+  // State to track all available modes for the current collection
+  const [availableModes, setAvailableModes] = useState<Array<{ modeId: string, name: string }>>([]);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showColorPicker, setShowColorPicker] = useState<boolean>(false);
-  const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
-  const [tempColor, setTempColor] = useState<{r: number, g: number, b: number, a: number}>({r: 0, g: 0, b: 0, a: 1});
-  const [colorPickerPosition, setColorPickerPosition] = useState<{top: number, left: number}>({top: 0, left: 0});
   const [figmaApiKey, setFigmaApiKey] = useState<string>('');
-  const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [cssVariables, setCssVariables] = useState<string>('');
+  // Add a new state for tracking mode-specific values
+  // Add these new state variables after the other state declarations (around line 570)
 
-  // Tree state
-  const [treeData, setTreeData] = useState<TreeNode[]>(initialTree);
-  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+  // Use a ref to keep track of the latest variable values for saving
+  const latestVariableValues = useRef<Record<string, Variable>>({});
+
+  // Add a ref to track first load
+  const hasInitializedRef = useRef(false);
+  // Add a ref to track initial API call during a session
+  const initialApiCallMadeRef = useRef(false);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    resetApiCallState: () => {
+      // Reset the API call tracking to allow a fresh call
+      initialApiCallMadeRef.current = false;
+    }
+  }));
 
   // Initialize with stored API key if available
   useEffect(() => {
-    const storedKey = localStorage.getItem('figmaApiKey');
-    if (storedKey) {
-      setFigmaApiKey(storedKey);
+    // Get the API token based on selected space
+    const token = figmaConfig.getFigmaToken();
+    
+    if (token) {
+      setFigmaApiKey(token);
+      // Store the token for later use by the figmaApi module
+      localStorage.setItem('figmaApiKey', token);
     } else {
       // Set default value as shown in the image
       setFigmaApiKey('32SDKSD2312FERF');
     }
-  }, []);
+  }, [selectedSpace]); // Re-run when space changes
 
-  // Load Figma variable data
+  // Load Figma variable data when space changes
   useEffect(() => {
-    // Auto-sync with Figma on first load using the default file ID
+    // Only check for duplicate initializations if this is the first mount
+    // Without any specific space change
+    const isInitialMount = !hasInitializedRef.current;
+    
+    // Skip entirely if this is a duplicate API call during initial rendering
+    // This prevents the duplicate calls commonly seen with React Strict Mode
+    if (!isInitialMount && initialApiCallMadeRef.current && selectedSpace === figmaConfig.getSelectedSpace()) {
+      console.log('Skipping duplicate API call - space has not actually changed');
+      return;
+    }
+    
+    // Track that we're making an API call for this space
+    initialApiCallMadeRef.current = true;
+
+    // Log whether this is first load or space change
+    if (hasInitializedRef.current) {
+      console.log(`Reloading data due to space change: ${selectedSpace}`);
+    } else {
+      console.log('First initialization of Figma data');
+      hasInitializedRef.current = true;
+    }
+
+    // Auto-sync with Figma on first load or when space changes, using the stored file IDs
     const fileId = figmaConfig.getStoredFigmaFileId();
+    const themeFileId = figmaConfig.getStoredThemeFigmaFileId();
+    const allColorsFileId = figmaConfig.getStoredAllColorsFigmaFileId();
+    
+    // Exit early if no file ID is configured - prevent unnecessary API calls
+    if (!fileId) {
+      console.log('No Figma file ID configured. Skipping auto-sync.');
+      return;
+    }
     
     // Show loading state
     setIsLoading(true);
     setLoadingMessage('Syncing with Figma...');
     setErrorMessage(null);
     
-    // Call the Figma API
-    figmaApi.getLocalVariables(fileId)
-      .then(data => {
-        console.log('Figma variables data:', data);
-        processVariableData(data);
-        setLoadingMessage('Successfully synced variables from Figma!');
+    // Create an array to store all variables from different files
+    let allCombinedVariables: Variable[] = [];
+    
+    // Create a ref to store theme variables specifically for reference resolution
+    const themeVariablesRef: Record<string, Variable> = {};
+    
+    // Track the number of completed requests
+    let completedRequests = 0;
+    const totalRequests = 1 + (themeFileId ? 1 : 0) + (allColorsFileId ? 1 : 0);
+
+    // Helper function to track progress and finish loading when all requests are done
+    const trackProgress = (source: string) => {
+      completedRequests++;
+      console.log(`Completed ${completedRequests}/${totalRequests} requests. Source: ${source}`);
+      
+      if (completedRequests === totalRequests) {
+        setLoadingMessage('Successfully synced all variables from Figma!');
+        
+        // Now that we have all variables, process the brand and theme options from the theme file
+        processThemeOptions();
+        
         // Auto-clear success message after 3 seconds
         setTimeout(() => {
           setLoadingMessage('');
           setIsLoading(false);
+          
+          // After loading is complete, automatically select the first collection in the tree
+          setTimeout(() => {
+            // This timeout gives React time to update the DOM with the new tree data
+            if (treeData.length > 0) {
+              const firstCollection = treeData[0];
+              console.log('Auto-selecting first collection:', firstCollection.name);
+              setSelectedNodeId(firstCollection.id);
+            }
+          }, 100);
         }, 3000);
-      })
-      .catch(error => {
-        console.error('Error syncing with Figma:', error);
-        setErrorMessage(`Error syncing with Figma: ${error.message}. Falling back to local data.`);
+      }
+    };
+    
+    // Process the theme options based on theme file variables
+    const processThemeOptions = () => {
+      console.log('Processing theme file modes for selector options');
+      
+      // Find theme variables and collections with mode information
+      const themeFileVariables = allVariables.filter(v => v.source === 'Theme');
+      
+      if (themeFileVariables.length === 0 || !figmaData) {
+        console.log('No theme file variables or data found for processing options');
+        return;
+      }
+      
+      console.log('Processing theme collections for mode information');
+      
+      // Extract brand and theme options from non-hidden collections in the theme file
+      const brandSet = new Set<string>();
+      const themeSet = new Set<string>();
+      
+      // Always include Default
+      themeSet.add('Default');
+      brandSet.add('Default');
+      
+      // Get collections from figmaData that aren't hidden
+      if (figmaData.meta?.variableCollections) {
+        // Process each collection's modes
+        for (const [collectionId, collection] of Object.entries(figmaData.meta.variableCollections)) {
+          // Only process collections that aren't hidden from publishing
+          if (!collection.hiddenFromPublishing) {
+            console.log(`Processing modes from collection: ${collection.name}`);
+            
+            // Process each mode in the collection
+            if (collection.modes) {
+              for (const mode of collection.modes) {
+                const modeName = mode.name;
+                console.log(`Processing mode: ${modeName} (ID: ${mode.modeId})`);
+                
+                // Extract brand and theme from mode name
+                if (modeName.includes('(') && modeName.includes(')')) {
+                  // Extract the brand (text before the first parenthesis)
+                  const brandMatch = modeName.match(/^(.*?)\s*\(/);
+                  if (brandMatch && brandMatch[1]) {
+                    const brand = brandMatch[1].trim();
+                    brandSet.add(brand);
+                    console.log(`Extracted brand: ${brand}`);
+                  }
+                  
+                  // Extract the theme (text inside parentheses)
+                  const themeMatch = modeName.match(/\((.*?)\)/);
+                  if (themeMatch && themeMatch[1]) {
+                    const theme = themeMatch[1].trim();
+                    themeSet.add(theme);
+                    console.log(`Extracted theme: ${theme}`);
+                  }
+                } else if (modeName !== 'Default') {
+                  // If no parentheses but not 'Default', treat the whole name as a brand
+                  brandSet.add(modeName);
+                  console.log(`Extracted brand (no theme): ${modeName}`);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Convert sets to arrays for SelectOption format
+      const brandOptions = Array.from(brandSet).map(brand => ({
+        value: brand,
+        label: brand
+      }));
+      
+      const themeOptions = Array.from(themeSet).map(theme => ({
+        value: theme,
+        label: theme
+      }));
+      
+      console.log('Generated brand options:', brandOptions);
+      console.log('Generated theme options:', themeOptions);
+      
+      // Update the brand and theme options in state
+      if (brandOptions.length > 0) {
+        // Update the available options array
+        setAvailableBrandOptions(brandOptions);
+        
+        // Set the first brand as selected by default
+        setSelectedBrand([brandOptions[0]]);
+        
+        console.log('Updated brand options and selected brand:', brandOptions[0]);
+      }
+      
+      if (themeOptions.length > 0) {
+        // Update the available options array
+        setAvailableThemeOptions(themeOptions);
+        
+        // Set the first theme as selected by default
+        setSelectedThemes([themeOptions[0]]);
+        
+        console.log('Updated theme options and selected theme:', themeOptions[0]);
+      }
+    };
+    
+    // Error handler for API calls
+    const handleApiError = (error: any, source: string) => {
+      console.error(`Error syncing with Figma (${source}):`, error);
+      setErrorMessage(`Error syncing with Figma (${source}): ${error.message}. Falling back to local data.`);
         setIsLoading(false);
         
         // Fallback to local JSON if Figma sync fails
@@ -571,325 +439,997 @@ function VisualEditor() {
       .then((data) => {
         setFigmaData(data.default);
         processVariableData(data.default);
+          
+          // After loading the fallback data, select the first collection
+          setTimeout(() => {
+            if (treeData.length > 0) {
+              const firstCollection = treeData[0];
+              console.log('Auto-selecting first collection (fallback):', firstCollection.name);
+              setSelectedNodeId(firstCollection.id);
+            }
+          }, 100);
       })
           .catch(localError => console.error('Error loading local variable data:', localError));
+    };
+    
+    // Changed the order: All Colors first, then Theme, then Main Figma file
+    
+    // All Colors Figma file (if provided)
+    if (allColorsFileId) {
+      figmaApi.getLocalVariables(allColorsFileId)
+        .then(data => {
+          console.log('All Colors Figma variables data:', data);
+          // Process all colors variables - starting with this as the base
+          const allColorsVariables = processVariableData(data, true, 'All Colors');
+          allCombinedVariables = [...allColorsVariables];
+          
+          // Update the state with combined variables
+          setAllVariables(allCombinedVariables);
+          setVariables(allCombinedVariables);
+          
+          trackProgress('All Colors Figma File');
+        })
+        .catch(error => {
+          console.error('Error pulling from All Colors Figma:', error);
+          trackProgress('All Colors Figma File (Error)');
+        });
+    }
+    
+    // Theme Figma file (if provided)
+    if (themeFileId) {
+      figmaApi.getLocalVariables(themeFileId)
+        .then(data => {
+          console.log('Theme Figma variables data:', data);
+          // Process theme variables without clearing existing ones
+          const themeVariables = processVariableData(data, false, 'Theme');
+          
+          // Store theme variables in our ref for reference resolution
+          themeVariables.forEach(variable => {
+            if (variable.id) {
+              themeVariablesRef[variable.id] = variable;
+            }
+          });
+          
+          allCombinedVariables = [...allCombinedVariables, ...themeVariables];
+          
+          // Update the state with combined variables
+          setAllVariables(allCombinedVariables);
+          setVariables(allCombinedVariables);
+          
+          trackProgress('Theme Figma File');
+        })
+        .catch(error => {
+          console.error('Error pulling from Theme Figma:', error);
+          trackProgress('Theme Figma File (Error)');
+        });
+    }
+    
+    // Main Figma file - load last
+    figmaApi.getLocalVariables(fileId)
+      .then(data => {
+        console.log('Main Figma variables data:', data);
+        setFigmaData(data);
+        // Process without clearing if we had previous data
+        const mainVariables = processVariableData(data, !allColorsFileId, 'Main', themeVariablesRef);
+        allCombinedVariables = [...allCombinedVariables, ...mainVariables];
+        
+        // Update the state with combined variables so far
+        setAllVariables(allCombinedVariables);
+        setVariables(allCombinedVariables);
+        
+        trackProgress('Main Figma File');
+      })
+      .catch(error => {
+        console.error('Error pulling from Main Figma:', error);
+        setErrorMessage(`Error pulling from Main Figma: ${error.message}`);
+        setIsLoading(false);
       });
-  }, []);
+  }, [selectedSpace]); // Re-run when space changes
 
   // Filter variables when selections change
   useEffect(() => {
-    // Filter variables based on mode whenever any select value changes
-    if (allVariables.length > 0) {
-      const filtered = filterVariablesByMode();
-      setVariables(filtered);
-      console.log(`Filtered to ${filtered.length} variables for selected mode`);
-    }
-  }, [selectedBrand, selectedGrade, selectedDevice, selectedTheme, allVariables]);
+    console.log('Filtering variables by mode...');
+    filterVariablesByMode();
+  }, [selectedBrand, selectedGrade, selectedDevice, selectedThemes, allVariables]);
 
   const filterVariablesByMode = () => {
     if (allVariables.length === 0) return [];
 
-    const currentModeIdentifier = `${selectedBrand.value}-${selectedGrade.value}-${selectedDevice.value}-${selectedTheme.value}`;
-    console.log(`Current mode identifier: ${currentModeIdentifier}`);
+    // Generate a current mode identifier based on selections
+    const currentModeIdentifier = `${ selectedBrand[0]?.value }-${ selectedGrade.value }-${ selectedDevice.value }-${ selectedThemes[0]?.value }`;
+    console.log(`Current mode identifier: ${ currentModeIdentifier }`);
     
     // Find mode IDs that match this identifier
     const matchingModeIds = Object.entries(modeMapping).filter(([, identifier]) => {
       return identifier === currentModeIdentifier;
     }).map(([modeId]) => modeId);
     
-    console.log(`Found ${matchingModeIds.length} matching mode IDs`);
+    console.log(`Found ${ matchingModeIds.length } matching mode IDs`);
     
     if (matchingModeIds.length > 0) {
       // We have an exact match, filter variables with these mode IDs
       const filtered = allVariables.filter(variable => matchingModeIds.includes(variable.modeId));
-      console.log(`Exact match found. Filtered to ${filtered.length} variables`);
+      console.log(`Exact match found. Filtered to ${ filtered.length } variables`);
       return filtered;
     } else {
       // Try partial matching by prioritizing brand first
       const partialMatches = Object.entries(modeMapping).filter(([, identifier]) => {
-        return identifier.startsWith(`${selectedBrand.value}-`);
+        return identifier.startsWith(`${ selectedBrand[0]?.value }-`);
       }).map(([modeId]) => modeId);
       
       if (partialMatches.length > 0) {
         const filtered = allVariables.filter(variable => partialMatches.includes(variable.modeId));
-        console.log(`Partial match found. Filtered to ${filtered.length} variables`);
+        console.log(`Partial match found. Filtered to ${ filtered.length } variables`);
         return filtered;
       }
     }
     
     // If no matches, return all variables
-    console.log(`No matches found. Showing all ${allVariables.length} variables`);
+    console.log(`No matches found. Showing all ${ allVariables.length } variables`);
     return allVariables;
   };
 
   // Process variable data to extract variables
-  const processVariableData = (data: FigmaVariablesData) => {
+  const processVariableData = (
+    data: FigmaVariablesData, 
+    clearExisting = true, 
+    source = 'Main',
+    themeVariablesRef: Record<string, Variable> = {}
+  ) => {
+    // If no data, return an empty array
+    if (!data || !data.meta) return [];
+    
+    // Set the Figma data for reference
     setFigmaData(data);
     
-    if (!data.meta) {
-      return;
-    }
-
-    const formattedVariables: Variable[] = [];
-    const availableModeOptions: {[key: string]: Set<string>} = {
-      brand: new Set(),
-      grade: new Set(),
-      device: new Set(),
-      theme: new Set()
-    };
-    const modeIdToIdentifier: {[modeId: string]: string} = {};
-
-    // Collect collections and variables to build the tree
-    const collectionMap: Record<string, { name: string, variables: Record<string, FigmaVariable> }> = {};
-
-    // Process each variable collection and its variables
-    Object.entries(data.meta.variableCollections).forEach(([collectionId, collection]) => {
+    // Map to store variable mode IDs to mode values/names
+    const modeNames: Record<string, { id: string, name: string }> = {};
+    
+    // Mapping of mode IDs to our combo identifier (brand-grade-device-theme)
+    const newModeMapping: { [modeId: string]: string } = clearExisting ? {} : { ...modeMapping };
+    
+    // Create a tree structure for the variable collections
+    const collections: Record<string, TreeNode> = {};
+    const newAllVariables: Variable[] = clearExisting ? [] : [...allVariables];
+    
+    // Process all collection and mode information
+    if (data.meta.variableCollections) {
+      for (const [collectionId, collection] of Object.entries(data.meta.variableCollections)) {
       // Skip collections that are hidden from publishing
       if (collection.hiddenFromPublishing) {
-        return;
+          console.log(`Skipping hidden collection: ${collection.name}`);
+          continue;
       }
 
-      // Initialize collection in the map
-      collectionMap[collectionId] = {
+        // Create the collection node
+        const collectionNode: TreeNode = {
+          id: collectionId,
         name: collection.name,
-        variables: {}
-      };
-
-      // Process each variable in this collection
-      collection.variableIds.forEach(variableId => {
-        const variable = data.meta.variables[variableId];
-        
-        // Skip variables that are hidden from publishing
-        if (!variable || variable.hiddenFromPublishing) {
-          return;
-        }
-
-        // Store the variable in the collection map
-        collectionMap[collectionId].variables[variableId] = variable;
-
-        // Process each mode value for this variable
-        Object.entries(variable.valuesByMode).forEach(([modeId, value]) => {
-          // Get the mode name
-          const mode = collection.modes.find(m => m.modeId === modeId);
-          if (!mode) return;
-          
-          // Extract brand, grade, device, and theme from mode name
-          // Format can be "connect-primary-desktop-light" or "Connect/Primary/Desktop/Light"
-          const modeNameParts = mode.name.includes('-') 
-            ? mode.name.split('-') 
-            : mode.name.split('/').map(part => part.toLowerCase());
-          
-          if (modeNameParts.length >= 4) {
-            const [brand, grade, device, theme] = modeNameParts;
-            
-            // Store the available mode options
-            availableModeOptions.brand.add(brand);
-            availableModeOptions.grade.add(grade);
-            availableModeOptions.device.add(device);
-            availableModeOptions.theme.add(theme);
-            
-            // Store the mapping from mode ID to identifier
-            const modeIdentifier = `${brand}-${grade}-${device}-${theme}`;
-            modeIdToIdentifier[modeId] = modeIdentifier;
-          }
-
-          // Format each variable value
-          const formattedValue = formatVariableValue(value, variable.resolvedType);
-          
-          formattedVariables.push({
-            id: variable.id,
-            name: variable.name,
-            value: formattedValue.displayValue,
-            rawValue: value,
-            modeId,
-            collectionName: collection.name,
-            isColor: variable.resolvedType === 'COLOR',
-            valueType: variable.resolvedType,
-            ...(formattedValue.referencedVariable && { 
-              referencedVariable: formattedValue.referencedVariable 
-            })
-          });
-        });
-      });
-    });
-
-    // Build the tree from collections and variables
-    const newTreeData: TreeNode[] = [];
-    
-    // First create nodes for each collection
-    Object.entries(collectionMap).forEach(([collectionId, collection]) => {
-      // Group variables by type (color, typography, etc.)
-      const typeGroups: Record<string, TreeNode[]> = {};
-      
-      // Process variables in this collection
-      Object.values(collection.variables).forEach(variable => {
-        const type = variable.resolvedType.toLowerCase();
-        
-        if (!typeGroups[type]) {
-          typeGroups[type] = [];
-        }
-        
-        typeGroups[type].push({
-          id: variable.id,
-          name: variable.name,
-          type: 'file'
-        });
-      });
-      
-      // Create collection node with type groups as children
-      const collectionNode: TreeNode = {
-        id: collectionId,
-        name: collection.name,
-        type: 'folder',
-        isExpanded: collectionId === Object.keys(collectionMap)[0], // Expand first collection by default
-        children: []
-      };
-      
-      // Add type folders to collection
-      Object.entries(typeGroups).forEach(([type, variables]) => {
-        const typeFolderNode: TreeNode = {
-          id: `${collectionId}-${type}`,
-          name: type.charAt(0).toUpperCase() + type.slice(1), // Capitalize type name
           type: 'folder',
-          isExpanded: false,
-          children: variables.sort((a, b) => a.name.localeCompare(b.name)) // Sort variables alphabetically
+          isExpanded: collectionId === Object.keys(collections)[0], // Expand first collection by default
+          children: []
         };
         
-        collectionNode.children!.push(typeFolderNode);
-      });
+        // Map mode IDs to mode names
+        if (collection.modes) {
+          for (const mode of collection.modes) {
+            modeNames[mode.modeId] = { id: mode.modeId, name: mode.name };
+            
+            // If this is the Theme source, also parse mode names for brand/theme information
+            if (source === 'Theme') {
+              const modeName = mode.name;
+              
+              // We'll find the brand and theme from the mode name
+              let brand = 'Default';
+              let theme = 'Default';
+              
+              // Check if the mode name contains parentheses for theme extraction
+              if (modeName.includes('(') && modeName.includes(')')) {
+                // Extract the brand (text before the first parenthesis)
+                const brandMatch = modeName.match(/^(.*?)\s*\(/);
+                if (brandMatch && brandMatch[1]) {
+                  brand = brandMatch[1].trim();
+                }
+                
+                // Extract the theme (text inside parentheses)
+                const themeMatch = modeName.match(/\((.*?)\)/);
+                if (themeMatch && themeMatch[1]) {
+                  theme = themeMatch[1].trim();
+                }
+              } else if (modeName !== 'Default') {
+                // If no parentheses but not 'Default', use the whole name as brand
+                brand = modeName;
+              }
+              
+              // Create a mapping from mode ID to our brand-grade-device-theme format
+              // For now, we use fixed values for grade and device
+              const modeIdentifier = `${brand}-primary-desktop-${theme}`;
+              newModeMapping[mode.modeId] = modeIdentifier;
+              
+              console.log(`[THEME] Mapped mode '${modeName}' (ID: ${mode.modeId}) to: ${modeIdentifier}`);
+            }
+          }
+        }
+
+        // Store the collection for later use
+        collections[collectionId] = collectionNode;
+      }
+    }
+    
+    // Then, process all variables
+    const createdVariables: Variable[] = [];
+    if (data.meta.variables) {
+      // First pass: create all variables and organize them by collection
+      const variablesByCollection: Record<string, Record<string, { variable: Variable, node: TreeNode }>> = {};
       
-      // Sort type folders alphabetically
-      collectionNode.children!.sort((a, b) => a.name.localeCompare(b.name));
+      for (const [varId, figmaVar] of Object.entries(data.meta.variables)) {
+        // We need to create a variable for each mode, but only for modes that have values
+        // for this specific variable
+        const collectionId = figmaVar.variableCollectionId;
+        const collection = data.meta.variableCollections?.[collectionId];
+        
+        if (!collection) continue; // Skip if collection not found
+        
+        // Skip variables from hidden collections
+        if (collection.hiddenFromPublishing) {
+          console.log(`Skipping variable ${figmaVar.name} from hidden collection: ${collection.name}`);
+          continue;
+        }
+        
+        // Initialize the collection if it doesn't exist
+        if (!variablesByCollection[collectionId]) {
+          variablesByCollection[collectionId] = {};
+        }
+        
+        // Parse the variable name to extract the actual display name (last part after '/')
+        const nameParts = figmaVar.name.split('/');
+        const displayName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : figmaVar.name;
+        
+        // Create a tree node for this variable - only once per variable ID
+        if (!variablesByCollection[collectionId][varId]) {
+          // Create a tree node for this variable
+          const variableNode: TreeNode = {
+            id: varId,
+            name: displayName, // Use the extracted name (last part after slash)
+            type: 'file',
+            // Store the full path for hierarchy creation
+            path: nameParts.length > 1 ? nameParts.slice(0, -1) : []
+          };
+          
+          // Get the first mode to use as the representative variable
+          const firstModeId = Object.keys(figmaVar.valuesByMode)[0];
+          if (!firstModeId) continue; // Skip if no modes
+          
+          const value = figmaVar.valuesByMode[firstModeId];
+          
+          // Process the variable for the first mode to get a representative variable
+          // Check if the value is a reference to another variable
+          let isReference = false;
+          let referencedVariable = undefined;
+          let rawValue = value;
+          let displayValue = '';
+          let isColor = false;
+          
+          // Handle different value types
+          if (typeof value === 'object' && value !== null) {
+            if ('type' in value && value.type === 'VARIABLE_ALIAS') {
+              isReference = true;
+              
+              // Extract reference ID
+              let refId = '';
+              if ('id' in value && value.id) {
+                refId = String(value.id);
+                
+                // Handle Figma's format where the ID could be "fileKey/variableId"
+                if (refId.includes('/')) {
+                  refId = refId.split('/')[1];
+                }
+                
+                // Try to find the referenced variable in the data
+                const refVariable = data.meta.variables?.[refId];
+                
+                if (refVariable) {
+                  const refCollectionId = refVariable.variableCollectionId;
+                  const refCollection = data.meta.variableCollections?.[refCollectionId];
+                  
+                  referencedVariable = {
+                    id: refId,
+                    name: refVariable.name,
+                    collection: refCollection?.name || 'Unknown Collection',
+                    fileId: '', // Empty for local references
+                    finalValue: null,
+                    finalValueType: refVariable.resolvedType
+                  };
+                } else if (Object.keys(themeVariablesRef).length > 0) {
+                  // Reference not found locally - try to find it in theme variables
+                  // This handles the case where a reference ID is missing or invalid
+                  console.log(`Reference not found locally, searching in theme variables: ${refId}`);
+                  
+                  // Try exact match first
+                  const themeVariable = themeVariablesRef[refId];
+                  
+                  if (themeVariable) {
+                    console.log(`Found direct reference in theme variables: ${themeVariable.name}`);
+                    referencedVariable = {
+                      id: refId,
+                      name: themeVariable.name,
+                      collection: themeVariable.collectionName || 'Theme Collection',
+                      fileId: '', // Theme file references don't need file ID
+                      finalValue: themeVariable.rawValue,
+                      finalValueType: themeVariable.valueType
+                    };
+                  } else {
+                    // If no direct match, try to find a variable with a similar name
+                    // This is a fallback for when IDs don't match but names might
+                    console.log(`No direct match for ${refId}, searching by name`);
+                    
+                    // Extract the variable name from the current variable for comparison
+                    const varNameParts = figmaVar.name.split('/');
+                    const varNameToMatch = varNameParts[varNameParts.length - 1]; // Use last part of path
+                    
+                    // Find theme variables with a similar name
+                    const matchingThemeVars = Object.values(themeVariablesRef).filter(v => {
+                      const themeNameParts = v.name.split('/');
+                      const themeVarName = themeNameParts[themeNameParts.length - 1];
+                      return themeVarName === varNameToMatch;
+                    });
+                    
+                    if (matchingThemeVars.length > 0) {
+                      const matchedVar = matchingThemeVars[0]; // Use the first match
+                      console.log(`Found name-based match in theme variables: ${matchedVar.name}`);
+                      
+                      referencedVariable = {
+                        id: matchedVar.id || refId, // Use matched ID if available
+                        name: matchedVar.name,
+                        collection: matchedVar.collectionName || 'Theme Collection',
+                        fileId: '', // Theme file references don't need file ID
+                        finalValue: matchedVar.rawValue,
+                        finalValueType: matchedVar.valueType
+                      };
+                    } else {
+                      console.log(`No matching theme variable found for reference: ${refId}`);
+                    }
+                  }
+                }
+              }
+            } else if ('r' in value && 'g' in value && 'b' in value) {
+              // It's a color value
+              isColor = true;
+              const rgbaValue = value as RGBAValue;
+              
+              // Scale to 0-255 range for display
+              const r = Math.round(rgbaValue.r * 255);
+              const g = Math.round(rgbaValue.g * 255);
+              const b = Math.round(rgbaValue.b * 255);
+              
+              displayValue = `${r}, ${g}, ${b}`;
+              rawValue = {
+                r: rgbaValue.r,
+                g: rgbaValue.g,
+                b: rgbaValue.b,
+                a: 'a' in rgbaValue ? rgbaValue.a : 1 
+              };
+            }
+          }
+          
+          // Create a representative variable for this variable ID
+          const representativeVariable: Variable = {
+            id: varId,
+            name: figmaVar.name,
+            collectionName: collection.name,
+            modeId: firstModeId,
+            modeName: modeNames[firstModeId]?.name || 'Default',
+            value: displayValue || String(value),
+            rawValue: rawValue,
+            isColor: figmaVar.resolvedType === 'COLOR' || isColor,
+            valueType: isReference ? 'VARIABLE_ALIAS' : figmaVar.resolvedType,
+            referencedVariable: referencedVariable,
+            source: source // Add the source of the variable
+          };
+          
+          // Store this variable/node combination for later processing
+          variablesByCollection[collectionId][varId] = { 
+            variable: representativeVariable, 
+            node: variableNode 
+          };
+        }
       
+        // Process each mode to create actual variables (these will be used for editing/display)
+        for (const modeId in figmaVar.valuesByMode) {
+          const value = figmaVar.valuesByMode[modeId];
+          
+          // Check if the value is a reference to another variable
+          let isReference = false;
+          let referencedVariable = undefined;
+          let rawValue = value;
+          let displayValue = '';
+          let isColor = false;
+          
+          // Handle different value types
+          if (typeof value === 'object' && value !== null) {
+            if ('type' in value && value.type === 'VARIABLE_ALIAS') {
+              isReference = true;
+              
+              // Extract reference ID
+              let refId = '';
+              if ('id' in value && value.id) {
+                refId = String(value.id);
+                
+                // Handle Figma's format where the ID could be "fileKey/variableId"
+                if (refId.includes('/')) {
+                  refId = refId.split('/')[1];
+                }
+                
+                // Try to find the referenced variable in the data
+                const refVariable = data.meta.variables?.[refId];
+                
+                if (refVariable) {
+                  const refCollectionId = refVariable.variableCollectionId;
+                  const refCollection = data.meta.variableCollections?.[refCollectionId];
+                  
+                  referencedVariable = {
+                    id: refId,
+                    name: refVariable.name,
+                    collection: refCollection?.name || 'Unknown Collection',
+                    fileId: '', // Empty for local references
+                    finalValue: null,
+                    finalValueType: refVariable.resolvedType
+                  };
+                } else if (Object.keys(themeVariablesRef).length > 0) {
+                  // Reference not found locally - try to find it in theme variables
+                  console.log(`Reference not found locally, searching in theme variables: ${refId}`);
+                  
+                  // Try exact match first
+                  const themeVariable = themeVariablesRef[refId];
+                  
+                  if (themeVariable) {
+                    console.log(`Found direct reference in theme variables: ${themeVariable.name}`);
+                    referencedVariable = {
+                      id: refId,
+                      name: themeVariable.name,
+                      collection: themeVariable.collectionName || 'Theme Collection',
+                      fileId: '', // Theme file references don't need file ID
+                      finalValue: themeVariable.rawValue,
+                      finalValueType: themeVariable.valueType
+                    };
+                  } else {
+                    // If no direct match, try to find a variable with a similar name
+                    console.log(`No direct match for ${refId}, searching by name`);
+                    
+                    // Extract the variable name from the current variable for comparison
+                    const varNameParts = figmaVar.name.split('/');
+                    const varNameToMatch = varNameParts[varNameParts.length - 1]; // Use last part of path
+                    
+                    // Find theme variables with a similar name
+                    const matchingThemeVars = Object.values(themeVariablesRef).filter(v => {
+                      const themeNameParts = v.name.split('/');
+                      const themeVarName = themeNameParts[themeNameParts.length - 1];
+                      return themeVarName === varNameToMatch;
+                    });
+                    
+                    if (matchingThemeVars.length > 0) {
+                      const matchedVar = matchingThemeVars[0]; // Use the first match
+                      console.log(`Found name-based match in theme variables: ${matchedVar.name}`);
+                      
+                      referencedVariable = {
+                        id: matchedVar.id || refId, // Use matched ID if available
+                        name: matchedVar.name,
+                        collection: matchedVar.collectionName || 'Theme Collection',
+                        fileId: '', // Theme file references don't need file ID
+                        finalValue: matchedVar.rawValue,
+                        finalValueType: matchedVar.valueType
+                      };
+                    } else {
+                      console.log(`No matching theme variable found for reference: ${refId}`);
+                    }
+                  }
+                }
+              }
+            } else if ('r' in value && 'g' in value && 'b' in value) {
+              // It's a color value
+              isColor = true;
+              const rgbaValue = value as RGBAValue;
+              
+              // Scale to 0-255 range for display
+              const r = Math.round(rgbaValue.r * 255);
+              const g = Math.round(rgbaValue.g * 255);
+              const b = Math.round(rgbaValue.b * 255);
+              
+              displayValue = `${r}, ${g}, ${b}`;
+              rawValue = {
+                r: rgbaValue.r,
+                g: rgbaValue.g,
+                b: rgbaValue.b,
+                a: 'a' in rgbaValue ? rgbaValue.a : 1 
+              };
+            }
+          }
+          
+          // Create a variable for this mode (will be used for editing/data management)
+          const variable: Variable = {
+            id: varId,
+            name: figmaVar.name,
+            collectionName: collection.name,
+            modeId: modeId,
+            modeName: modeNames[modeId]?.name || 'Default',
+            value: displayValue || String(value),
+            rawValue: rawValue,
+            isColor: figmaVar.resolvedType === 'COLOR' || isColor,
+            valueType: isReference ? 'VARIABLE_ALIAS' : figmaVar.resolvedType,
+            referencedVariable: referencedVariable,
+            source: source // Add the source of the variable
+          };
+          
+          // Add to the created variables array and all variables array
+          createdVariables.push(variable);
+          newAllVariables.push(variable);
+        }
+      }
+      
+      // Second pass: build hierarchical folder structure
+      for (const [collectionId, varsAndNodes] of Object.entries(variablesByCollection)) {
+        const collectionNode = collections[collectionId];
+        if (!collectionNode) continue;
+        
+        // Build a folder hierarchy for this collection
+        const rootFolders: Record<string, TreeNode> = {};
+        
+        // Process each variable to place it in the proper folder - only one entry per variable ID
+        Object.values(varsAndNodes).forEach(({ node }) => {
+          const path = node.path as string[] || [];
+          
+          if (path.length === 0) {
+            // If no path (no slashes in name), add directly to collection
+            if (!collectionNode.children) collectionNode.children = [];
+            collectionNode.children.push(node);
+            return;
+          }
+          
+          // Build the folder hierarchy
+          const currentLevel = rootFolders;
+          let currentPath = '';
+          let parentFolder: TreeNode | null = null;
+          
+          for (let i = 0; i < path.length; i++) {
+            const folderName = path[i];
+            currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+            
+            // Look for existing folder at this level
+            if (!currentLevel[folderName]) {
+              // Create folder if it doesn't exist
+              const newFolder: TreeNode = {
+                id: `${collectionId}-folder-${currentPath}`,
+                name: folderName,
+          type: 'folder',
+          isExpanded: false,
+                children: []
+              };
+              
+              currentLevel[folderName] = newFolder;
+              
+              // Add to parent if we have one, otherwise it's a root folder
+              if (parentFolder) {
+                if (!parentFolder.children) parentFolder.children = [];
+                parentFolder.children.push(newFolder);
+              }
+            }
+            
+            parentFolder = currentLevel[folderName];
+            
+            // Set up next level
+            if (i === path.length - 1) {
+              // Last folder in path, add the variable to it
+              if (!parentFolder.children) parentFolder.children = [];
+              parentFolder.children.push(node);
+            }
+          }
+        });
+        
+        // Add root folders to collection
+        Object.values(rootFolders).forEach(folder => {
+          if (!collectionNode.children) collectionNode.children = [];
+          collectionNode.children.push(folder);
+        });
+      }
+    }
+
+    // Build the tree from collections
+    const newTreeData: TreeNode[] = [];
+    
+    // Add each collection to the tree
+    Object.values(collections).forEach(collectionNode => {
       newTreeData.push(collectionNode);
     });
     
-    // Update tree with the new structure
-    setTreeData(newTreeData);
-
-    // Auto-select the first folder if available
-    if (newTreeData.length > 0) {
-      setSelectedNodeId(newTreeData[0].id);
+    // Log total variables created
+    console.log(`Created ${createdVariables.length} variables from ${source}`);
+    console.log(`Mode mappings created: ${Object.keys(newModeMapping).length}`);
+    
+    // Log mode mappings for debugging
+    if (source === 'Theme') {
+      console.log('Theme mode mappings:');
+      Object.entries(newModeMapping).forEach(([modeId, identifier]) => {
+        console.log(`  ${modeId} -> ${identifier} (${modeNames[modeId]?.name || 'Unknown'})`);
+      });
     }
-
-    console.log(`Total variables loaded: ${formattedVariables.length}`);
-    console.log(`Mode mappings created for ${Object.keys(modeIdToIdentifier).length} modes`);
     
-    // Store all data
-    setAllVariables(formattedVariables);
+    // Set the processed variables and tree data
+    if (clearExisting) {
+      setAllVariables(newAllVariables);
+      setVariables(newAllVariables);
+      setTreeData(newTreeData);
+      setModeMapping(newModeMapping);
+    } else {
+      setAllVariables(newAllVariables);
+      setVariables(newAllVariables);
+      
+      // Merge tree data
+      const combinedTreeData = [...treeData];
+      
+      // Check if collection already exists and merge if needed
+      newTreeData.forEach(newNode => {
+        const existingNodeIndex = combinedTreeData.findIndex(node => node.name === newNode.name);
+        if (existingNodeIndex !== -1) {
+          // Merge children from the new node into the existing node
+          if (newNode.children && newNode.children.length > 0) {
+            if (!combinedTreeData[existingNodeIndex].children) {
+              combinedTreeData[existingNodeIndex].children = [];
+            }
+            combinedTreeData[existingNodeIndex].children = [
+              ...combinedTreeData[existingNodeIndex].children || [],
+              ...newNode.children
+            ];
+          }
+        } else {
+          // Add as a new node
+          combinedTreeData.push(newNode);
+        }
+      });
+      
+      setTreeData(combinedTreeData);
+      setModeMapping({ ...modeMapping, ...newModeMapping });
+    }
     
-    // Store mode mappings
-    setModeMapping(modeIdToIdentifier);
-    
-    // IMPORTANT: First set all variables, then filter by selected mode
-    const filtered = filterVariablesByMode();
-    setVariables(filtered);
-    
-    // Hide loading state
-    setIsLoading(false);
-    setLoadingMessage('Variables loaded successfully from Figma!');
-    setTimeout(() => setLoadingMessage(''), 3000);
+    return createdVariables;
   };
 
   // Enhanced variable value change handler for dropdown
-  const handleVariableValueChange = (variable: Variable, newValue: string, isReference = false, refVariable?: Variable) => {
-    // Find the index of the variable to update
-    const index = variables.findIndex(v => 
-      v.id === variable.id && v.modeId === variable.modeId
-    );
+  const handleVariableValueChange = (variable: Variable, newValue: string | RGBAValue, isReference = false, refVariable?: Variable) => {
+    // Find the index of the variable to update - need to check if variable has an id
+    const index = variable.id
+      ? variables.findIndex(v => v.id === variable.id && v.modeId === variable.modeId)
+      : -1;
     
-    if (index === -1) return;
+    // IMPORTANT: If not found in variables, look in allVariables
+    // This is crucial because the filtered variables array might not contain the variable we're editing
+    const isInAllVariables = index === -1 && variable.id && 
+      allVariables.some(v => v.id === variable.id && v.modeId === variable.modeId);
     
-    const newVariables = [...variables];
+    if (index === -1 && !isInAllVariables) {
+      console.error('[ERROR] Variable not found in either variables or allVariables arrays:', variable);
+      return;
+    }
+    
+    // Create a copy of the variable
+    const updatedVariable = index !== -1 
+      ? { ...variables[index] } 
+      : { ...variable }; // Use the passed variable as a base if not found
     
     if (isReference && refVariable) {
-      // Handle reference to another variable
-      newVariables[index].value = refVariable.value;
-      newVariables[index].referencedVariable = {
-        id: refVariable.id,
-        collection: refVariable.collectionName,
-        name: refVariable.name || `Variable (${refVariable.id.substring(0, 8)}...)`,
+      // Handle reference to another variable - ensure refVariable has an id
+      if (!refVariable.id) return;
+
+      // Extract file ID if this is a cross-file reference
+      // Format: fileId/variableId or just variableId for same-file references
+      const refId = refVariable.id;
+      const refFileId = refVariable.fileId || ''; // This field would need to be added to the Variable interface
+      
+      // Store proper reference information
+      updatedVariable.value = refVariable.value;
+      updatedVariable.valueType = 'VARIABLE_ALIAS'; // Mark as an alias
+      updatedVariable.referencedVariable = {
+        id: refFileId ? `${refFileId}/${refId}` : refId, // Format ID properly for cross-file references
+        collection: refVariable.collection,
+        name: refVariable.name || `Variable (${refId.substring(0, 8)}...)`,
         finalValue: refVariable.rawValue,
         finalValueType: refVariable.valueType
       };
       
-      // For a real implementation with Figma API, we'd need to update the rawValue to a variable reference
-      // In a complete implementation, the rawValue would be set to something like:
-      // { type: 'VARIABLE_ALIAS', id: refVariable.id }
-      
-      // For our simplified version, we'll keep the original format but add a special marker
-      if (refVariable.isColor && refVariable.rawValue && typeof refVariable.rawValue === 'object' && 'r' in refVariable.rawValue) {
-        // Copy the color value but mark it as a reference
-        newVariables[index].rawValue = {
-          ...(refVariable.rawValue as RGBAValue),
-          isReference: true,  // Custom flag to mark this as a reference
-          referenceId: refVariable.id
-        };
-      } else {
-        // For non-colors, just store the reference info
-        newVariables[index].rawValue = {
-          value: refVariable.value,
-          isReference: true,
-          referenceId: refVariable.id,
-          referenceType: refVariable.valueType
-        };
-      }
-    }
-    else if (newVariables[index].isColor) {
-      // For color values, parse the comma-separated RGB values
-      const [r, g, b] = newValue.split(',').map(v => parseInt(v.trim(), 10));
-      
-      // Validate the values
-      if (isNaN(r) || isNaN(g) || isNaN(b) || r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
-        alert('Please enter valid RGB values (0-255, comma-separated)');
-        return;
-      }
-      
-      // Update the display value and raw value
-      newVariables[index].value = `${r}, ${g}, ${b}`;
-      newVariables[index].rawValue = {
-        r: r / 255,
-        g: g / 255,
-        b: b / 255,
-        a: (newVariables[index].rawValue as RGBAValue).a // Keep original alpha
+      // For Figma API, prepare the actual reference object
+        updatedVariable.rawValue = {
+        type: "VARIABLE_ALIAS",
+        id: refFileId ? `${refFileId}/${refId}` : refId
       };
       
-      // Clear reference if any
-      newVariables[index].referencedVariable = undefined;
-    } else {
-      // For non-color values, just update the value as is
-      newVariables[index].value = newValue;
-      // Clear reference if any
-      newVariables[index].referencedVariable = undefined;
+      console.log('[DEBUG] Setting variable reference:', {
+        variableName: updatedVariable.name,
+        referencedId: updatedVariable.referencedVariable.id,
+        referencedName: updatedVariable.referencedVariable.name,
+        referencedCollection: updatedVariable.referencedVariable.collection,
+        rawValue: updatedVariable.rawValue
+      });
     }
-    
-    setVariables(newVariables);
-    
-    // Also update the variable in allVariables to keep them in sync
-    const allVarsIndex = allVariables.findIndex(v => 
-      v.id === newVariables[index].id && v.modeId === newVariables[index].modeId
-    );
-    
-    if (allVarsIndex !== -1) {
-      const newAllVariables = [...allVariables];
-      newAllVariables[allVarsIndex] = newVariables[index];
-      setAllVariables(newAllVariables);
+    else {
+    // DIRECT RGBA OBJECT: Handle when we receive an RGBA object directly
+      if (variable.isColor && 
+             typeof newValue === 'object' && 
+             newValue !== null && 
+             'r' in newValue && 
+             'g' in newValue && 
+             'b' in newValue && 
+             'a' in newValue) {
+      
+      const rgbaValue = newValue as RGBAValue;
+      
+      // If the updatedVariable already has a rawValue with the same RGB values, 
+      // it means ColorSelector already set it, just ensure alpha is correct
+      if (updatedVariable.rawValue && 
+          typeof updatedVariable.rawValue === 'object' && 
+          'r' in updatedVariable.rawValue && 
+          'g' in updatedVariable.rawValue && 
+          'b' in updatedVariable.rawValue) {
+          
+          // Check if we have the same RGB values (likely came from ColorSelector)
+          const existingRawValue = updatedVariable.rawValue as RGBAValue;
+          if (existingRawValue.r === rgbaValue.r && 
+              existingRawValue.g === rgbaValue.g && 
+              existingRawValue.b === rgbaValue.b) {
+              
+              // Keep RGB values, ensure alpha is from the passed RGBA object
+              existingRawValue.a = rgbaValue.a;
+              
+              console.log('[DEBUG] Preserved existing rawValue but updated alpha:', {
+                alpha: rgbaValue.a,
+                r: existingRawValue.r,
+                g: existingRawValue.g,
+                b: existingRawValue.b,
+                variable: variable.name
+              });
+              
+              // No need to replace the entire object since we just updated the alpha
+              // and updateVariable.rawValue already references existingRawValue
+          } else {
+              // Different RGB values, replace the entire object
+              updatedVariable.rawValue = { 
+                r: rgbaValue.r,
+                g: rgbaValue.g, 
+                b: rgbaValue.b, 
+                a: rgbaValue.a 
+              };
+          }
+      } else {
+          // No existing rawValue, create a new one
+          updatedVariable.rawValue = { 
+            r: rgbaValue.r,
+            g: rgbaValue.g, 
+            b: rgbaValue.b, 
+            a: rgbaValue.a 
+          };
+      }
+      
+      // Update the display value for UI purposes only
+      updatedVariable.value = `${Math.round(rgbaValue.r)}, ${Math.round(rgbaValue.g)}, ${Math.round(rgbaValue.b)}`;
+      
+      console.log('[DEBUG] Using direct RGBA object with alpha:', {
+        r: rgbaValue.r,
+        g: rgbaValue.g,
+        b: rgbaValue.b,
+        a: rgbaValue.a,
+        variableName: variable.name
+      });
+      
+      // Clear any reference data
+      delete updatedVariable.referencedVariable;
+      }
+      // Handle direct value update (not a reference)
+      else if (typeof newValue === 'string') {
+        updatedVariable.value = newValue;
+
+        // For colors, we need to parse the r,g,b values
+        if (variable.isColor) {
+          // Trim whitespace and handle different input formats
+          const sanitizedValue = newValue.trim().replace(/\s+/g, '');
+          let r = 0, g = 0, b = 0, a = 1;
+
+          if (sanitizedValue.includes(',')) {
+            // Format: "r, g, b"
+            const parts = sanitizedValue.split(',').map(num => parseFloat(num.trim()));
+            r = isNaN(parts[0]) ? 0 : parts[0];
+            g = isNaN(parts[1]) ? 0 : parts[1];
+            b = isNaN(parts[2]) ? 0 : parts[2];
+            if (parts.length > 3) {
+              a = isNaN(parts[3]) ? 1 : parts[3];
+            } else if (variable.rawValue && typeof variable.rawValue === 'object' && 'a' in variable.rawValue) {
+              // Preserve the existing alpha value if not explicitly provided
+              a = (variable.rawValue as RGBAValue).a;
+            }
+          } else if (sanitizedValue.startsWith('rgb')) {
+            // Format: "rgb(r,g,b)" or "rgba(r,g,b,a)"
+            const rgbMatch = sanitizedValue.match(/rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)/);
+            if (rgbMatch) {
+              r = parseInt(rgbMatch[1], 10);
+              g = parseInt(rgbMatch[2], 10);
+              b = parseInt(rgbMatch[3], 10);
+              if (rgbMatch[4]) {
+                a = parseFloat(rgbMatch[4]);
+              } else if (variable.rawValue && typeof variable.rawValue === 'object' && 'a' in variable.rawValue) {
+                // Preserve the existing alpha value if not explicitly provided
+                a = (variable.rawValue as RGBAValue).a;
+              }
+            }
+          }
+
+          // Ensure r, g, b are in 0-255 range for display purposes
+          r = Math.max(0, Math.min(255, r));
+          g = Math.max(0, Math.min(255, g));
+          b = Math.max(0, Math.min(255, b));
+          a = Math.max(0, Math.min(1, a));
+
+          // Store raw values in the 0-255 range for consistency
+          // This ensures all color values throughout the app use the same scale
+          updatedVariable.rawValue = { 
+            r: r,
+            g: g, 
+            b: b, 
+            a: a 
+          };
+ 
+          console.log('[DEBUG] Storing color with alpha:', {
+            variableName: updatedVariable.name,
+            rawValue: updatedVariable.rawValue,
+            r: r,
+            g: g,
+            b: b,
+            a: a
+          });
+
+          // Update the display value for consistency
+          updatedVariable.value = `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
+          
+          console.log('[DEBUG] Alpha value for color variable:', {
+            variableName: variable.name,
+            alpha: a,
+            preservedFrom: sanitizedValue.includes(',') && sanitizedValue.split(',').length > 3 ? 'comma input' : 
+                           sanitizedValue.startsWith('rgba') ? 'rgba input' : 'existing rawValue'
+          });
+        } else {
+          // For other types, we need to convert the value appropriately
+          switch (variable.valueType) {
+            case 'NUMBER':
+              updatedVariable.rawValue = parseFloat(newValue);
+              break;
+            case 'BOOLEAN':
+              updatedVariable.rawValue = newValue === 'true';
+              break;
+            default:  // STRING and others
+              updatedVariable.rawValue = newValue;
+          }
+        }
+      }
+
+      // Clear any reference data
+      delete updatedVariable.referencedVariable;
+    }
+
+    console.log('[DEBUG] Updated color variable (final):', {
+      value: updatedVariable.value,
+      rawValue: updatedVariable.rawValue,
+      alpha: updatedVariable.isColor && 
+             updatedVariable.rawValue && 
+             typeof updatedVariable.rawValue === 'object' && 
+             'a' in updatedVariable.rawValue ? 
+             (updatedVariable.rawValue as RGBAValue).a : 'none',
+      displayValues: updatedVariable.value
+    });
+
+    // If found in the filtered variables array, update it there
+    if (index !== -1) {
+      const newVariables = [...variables];
+      newVariables[index] = updatedVariable;
+      setVariables(newVariables);
+      
+      // Force UI refresh by simulating a state change
+      // This will ensure the table updates immediately
+      setTimeout(() => {
+        const refreshVariables = [...newVariables];
+        setVariables(refreshVariables);
+      }, 0);
+    }
+
+    // Mark this variable as being edited - safely handle optional id
+    if (variable.id) {
+      setEditingVariables(prev => ({
+        ...prev,
+        [`${variable.id}-${variable.modeId}`]: true
+      }));
+
+      // IMPORTANT: Always update in allVariables regardless of where it was found
+      // This ensures the value is saved properly for all views of this variable
+      const allIndex = allVariables.findIndex(v =>
+        v.id === variable.id && v.modeId === variable.modeId
+      );
+
+      if (allIndex !== -1) {
+        // Update the existing variable in allVariables
+        const updatedAllVariables = [...allVariables];
+        updatedAllVariables[allIndex] = { ...updatedVariable };
+        setAllVariables(updatedAllVariables);
+        console.log(`[DEBUG] Updated variable in allVariables: ${updatedVariable.name} (mode: ${updatedVariable.modeId})`, {
+          value: updatedVariable.value,
+          rawValue: updatedVariable.rawValue,
+          alpha: updatedVariable.isColor && 
+                 updatedVariable.rawValue && 
+                 typeof updatedVariable.rawValue === 'object' && 
+                 'a' in updatedVariable.rawValue ? 
+                 (updatedVariable.rawValue as RGBAValue).a : 'not a color'
+        });
+
+        // CRITICAL: Store the latest value in our ref for immediate access
+        if (variable.id) {
+          const refKey = `${variable.id}-${variable.modeId}`;
+
+          // Make a deep copy to ensure the ref has its own independent object
+          const refValue = JSON.parse(JSON.stringify(updatedVariable));
+
+          // Store in the ref for immediate access
+          latestVariableValues.current[refKey] = refValue;
+
+          console.log(`[DEBUG] Stored latest value in ref for ${refKey}:`, {
+            variableName: updatedVariable.name,
+            value: updatedVariable.value,
+            rawValue: updatedVariable.rawValue,
+            time: new Date().toISOString(),
+            refValue: refValue
+          });
+        }
+      } else {
+        // Add to allVariables if it doesn't exist yet
+        setAllVariables(prev => [...prev, { ...updatedVariable }]);
+        console.log(`[DEBUG] Added new variable to allVariables: ${updatedVariable.name} (mode: ${updatedVariable.modeId})`, {
+          value: updatedVariable.value,
+          rawValue: updatedVariable.rawValue
+        });
+
+        // CRITICAL: Store the latest value in our ref for immediate access
+        if (variable.id) {
+          const refKey = `${variable.id}-${variable.modeId}`;
+
+          // Make a deep copy to ensure the ref has its own independent object
+          const refValue = JSON.parse(JSON.stringify(updatedVariable));
+
+          // Store in the ref for immediate access
+          latestVariableValues.current[refKey] = refValue;
+
+          console.log(`[DEBUG] Stored latest value in ref for ${refKey}:`, {
+            variableName: updatedVariable.name,
+            value: updatedVariable.value,
+            rawValue: updatedVariable.rawValue,
+            time: new Date().toISOString(),
+            refValue: refValue
+          });
+        }
+      }
     }
   };
 
   // Handle Figma operations
   const handlePullFromFigma = () => {
-    // Get the stored Figma file ID or prompt for a new one
-    let fileId = figmaConfig.getStoredFigmaFileId();
+    // Get the stored Figma file IDs based on the current space
+    const fileId = figmaConfig.getStoredFigmaFileId();
+    const themeFileId = figmaConfig.getStoredThemeFigmaFileId();
+    const allColorsFileId = figmaConfig.getStoredAllColorsFigmaFileId();
     
-    // If no stored file ID, prompt for one with the default value
-    if (!fileId) {
+    // If no stored file ID, prompt for one with the default value (only allowed in Test space)
+    if (!fileId && figmaConfig.isManualFileIdAllowed()) {
       const promptedFileId = prompt('Enter Figma File ID:', figmaConfig.DEFAULT_FIGMA_FILE_ID);
       if (!promptedFileId) return;
       
-      fileId = promptedFileId;
-      // Store the file ID for future use
-      figmaConfig.storeFigmaFileId(fileId);
+      figmaConfig.storeFigmaFileId(promptedFileId);
+    } else if (!fileId) {
+      // If we're in a space that doesn't allow manual input and we still don't have a fileId,
+      // display an error and return
+      setErrorMessage("No Figma file ID configured for this space. Please check your environment variables.");
+      return;
     }
     
     // Show loading state
@@ -897,204 +1437,92 @@ function VisualEditor() {
     setLoadingMessage('Pulling data from Figma...');
     setErrorMessage(null);
     
-    // Call the Figma API
-    figmaApi.getLocalVariables(fileId)
-      .then(data => {
-        console.log('Figma variables data:', data);
-        processVariableData(data);
-        setLoadingMessage('Successfully pulled variables from Figma!');
+    // Create an array to store all variables from different files
+    let allCombinedVariables: Variable[] = [];
+    
+    // Track the number of completed requests
+    let completedRequests = 0;
+    const totalRequests = 1 + (themeFileId ? 1 : 0) + (allColorsFileId ? 1 : 0);
+
+    // Helper function to track progress and finish loading when all requests are done
+    const trackProgress = (source: string) => {
+      completedRequests++;
+      console.log(`Completed ${completedRequests}/${totalRequests} requests. Source: ${source}`);
+      
+      if (completedRequests === totalRequests) {
+        setLoadingMessage('Successfully pulled all variables from Figma!');
         // Auto-clear success message after 3 seconds
         setTimeout(() => {
           setLoadingMessage('');
           setIsLoading(false);
         }, 3000);
+      }
+    };
+    
+    // Changed the order: All Colors first, then Theme, then Main Figma file
+    
+    // All Colors Figma file (if provided)
+    if (allColorsFileId) {
+      figmaApi.getLocalVariables(allColorsFileId)
+        .then(data => {
+          console.log('All Colors Figma variables data:', data);
+          // Process all colors variables - starting with this as the base
+          const allColorsVariables = processVariableData(data, true, 'All Colors');
+          allCombinedVariables = [...allColorsVariables];
+          
+          // Update the state with combined variables
+          setAllVariables(allCombinedVariables);
+          setVariables(allCombinedVariables);
+          
+          trackProgress('All Colors Figma File');
       })
       .catch(error => {
-        console.error('Error pulling from Figma:', error);
-        setErrorMessage(`Error pulling from Figma: ${error.message}`);
+          console.error('Error pulling from All Colors Figma:', error);
+          trackProgress('All Colors Figma File (Error)');
+        });
+    }
+    
+    // Theme Figma file (if provided)
+    if (themeFileId) {
+      figmaApi.getLocalVariables(themeFileId)
+        .then(data => {
+          console.log('Theme Figma variables data:', data);
+          // Process theme variables without clearing existing ones
+          const themeVariables = processVariableData(data, false, 'Theme');
+          allCombinedVariables = [...allCombinedVariables, ...themeVariables];
+          
+          // Update the state with combined variables
+          setAllVariables(allCombinedVariables);
+          setVariables(allCombinedVariables);
+          
+          trackProgress('Theme Figma File');
+        })
+        .catch(error => {
+          console.error('Error pulling from Theme Figma:', error);
+          trackProgress('Theme Figma File (Error)');
+        });
+    }
+    
+    // Main Figma file - load last
+    figmaApi.getLocalVariables(fileId)
+      .then(data => {
+        console.log('Main Figma variables data:', data);
+        setFigmaData(data);
+        // Process without clearing if we had previous data
+        const mainVariables = processVariableData(data, !allColorsFileId, 'Main');
+        allCombinedVariables = [...allCombinedVariables, ...mainVariables];
+        
+        // Update the state with combined variables so far
+        setAllVariables(allCombinedVariables);
+        setVariables(allCombinedVariables);
+        
+        trackProgress('Main Figma File');
+      })
+      .catch(error => {
+        console.error('Error pulling from Main Figma:', error);
+        setErrorMessage(`Error pulling from Main Figma: ${error.message}`);
         setIsLoading(false);
       });
-  };
-
-  const handlePushToFigma = async () => {
-    // Get the stored Figma file ID or prompt for a new one
-    let fileId = figmaConfig.getStoredFigmaFileId();
-    
-    // If no stored file ID, prompt for one
-    if (!fileId) {
-      const defaultFileId = 'DkAAZve1ubDG8QdfLLzfUF';
-      const promptedFileId = prompt('Enter Figma File ID:', defaultFileId);
-      if (!promptedFileId) return;
-      
-      fileId = promptedFileId;
-      // Store the file ID for future use
-      figmaConfig.storeFigmaFileId(fileId);
-    }
-    
-    // Show loading state
-    setIsLoading(true);
-    setLoadingMessage('Validating Figma access...');
-    setErrorMessage(null);
-    
-    try {
-      // First validate the Figma token
-      const validation = await figmaApi.validateToken();
-      
-      if (!validation.valid) {
-        throw new Error('Invalid Figma token. Please check your API token and try again.');
-      }
-      
-      setLoadingMessage('Pushing data to Figma...');
-      
-      // Prepare the data to send
-      const updatedVariables: Record<string, unknown> = {};
-      const variableIds: string[] = [];
-      
-      // Collect all updated variables
-      allVariables.forEach(variable => {
-        if (variable.isColor) {
-          // For color variables, format as RGBA
-          const colorValue = variable.rawValue as RGBAValue;
-          
-          // Add to the variables payload
-          updatedVariables[variable.id] = {
-            resolvedType: 'COLOR',
-            valuesByMode: {
-              [variable.modeId]: colorValue
-            }
-          };
-          
-          // Add to the list of variables to update
-          if (!variableIds.includes(variable.id)) {
-            variableIds.push(variable.id);
-          }
-        }
-      });
-      
-      // Skip if no variables to update
-      if (variableIds.length === 0) {
-        setLoadingMessage('No color variables to update.');
-        setTimeout(() => {
-          setLoadingMessage('');
-          setIsLoading(false);
-        }, 3000);
-        return;
-      }
-      
-      // Prepare the complete payload
-      const variableData = {
-        variableIds,
-        variables: updatedVariables
-      };
-      
-      console.log('Pushing variables to Figma:', variableData);
-      console.log(`User: ${validation.user?.email} (${validation.user?.id})`);
-      
-      // Call the Figma API
-      const response = await figmaApi.postVariables(fileId, variableData);
-      
-      console.log('Figma response:', response);
-      setLoadingMessage(`Successfully pushed ${variableIds.length} variables to Figma!`);
-      
-      // Auto-clear success message after 3 seconds
-      setTimeout(() => {
-        setLoadingMessage('');
-        setIsLoading(false);
-      }, 3000);
-      
-    } catch (error: unknown) {
-      console.error('Error pushing to Figma:', error);
-      
-      // Type guard for axios error with response property
-      interface ApiError {
-        response?: {
-          status: number;
-          data?: {
-            message?: string;
-          };
-        };
-        message: string;
-      }
-      
-      // Handle specific error types
-      const apiError = error as ApiError;
-      
-      if (apiError.response) {
-        const status = apiError.response.status;
-        const errorData = apiError.response.data;
-        
-        // Handle "Incorrect account type" error specifically
-        if (errorData?.message?.includes('Incorrect account type')) {
-          setErrorMessage('This operation requires a Figma Professional or Organization account. Please upgrade your account to modify variables.');
-          setIsLoading(false);
-          return;
-        }
-        
-        // Handle other specific error codes
-        if (status === 403) {
-          setErrorMessage('Permission denied. Please check your Figma token permissions.');
-          setIsLoading(false);
-          return;
-        }
-        
-        if (status === 404) {
-          setErrorMessage("Error: File not found. Please check if the File ID is correct and that you have access to it.");
-          setIsLoading(false);
-          return;
-        }
-        
-        setErrorMessage(`Error: ${errorData?.message || 'Failed to push changes to Figma'}`);
-      } else {
-        // For network errors or other non-response errors
-        setErrorMessage(`Error: ${apiError.message || 'Failed to connect to Figma API'}`);
-      }
-      
-      setIsLoading(false);
-    }
-  };
-
-  const handlePushToProject = () => {
-    alert(`Push to project: ${selectedProject.label}`);
-    
-    // If there's a configured Figma file ID for this project, use it
-    const projectFigmaFileId = figmaConfig.getFigmaFileIdForProject(selectedProject.value);
-    if (projectFigmaFileId) {
-      console.log(`Using Figma File ID for ${selectedProject.label}: ${projectFigmaFileId}`);
-    }
-    
-    // Would implement project export functionality here
-  };
-
-  // Function to apply color changes
-  const handleColorChange = (newColor: {r: number, g: number, b: number, a: number}) => {
-    if (activeColorIndex === null) return;
-    
-    const variable = variables[activeColorIndex];
-    if (!variable) return;
-    
-    const newValue = `${newColor.r}, ${newColor.g}, ${newColor.b}`;
-    handleVariableValueChange(variable, newValue);
-  };
-  
-  // Function to close the color picker
-  const handleCloseColorPicker = () => {
-    setShowColorPicker(false);
-    setActiveColorIndex(null);
-  };
-
-  // Function to handle applying the Figma API key
-  const handleApplyApiKey = () => {
-    if (figmaApiKey.trim()) {
-      localStorage.setItem('figmaApiKey', figmaApiKey);
-      // In a real implementation, this would update the API client token
-      // Since we can't directly modify the figmaApi implementation, we'll just show a message
-      setLoadingMessage('Figma API Key updated successfully! (Restart may be required)');
-      setTimeout(() => {
-        setLoadingMessage('');
-      }, 3000);
-    } else {
-      setErrorMessage('Please enter a valid Figma API Key');
-    }
   };
 
   // Toggle folder expansion
@@ -1110,14 +1538,51 @@ function VisualEditor() {
         return node;
       });
     };
-    
+
     setTreeData(updateNodes(treeData));
   };
-  
+
   // Select a node
   const handleSelectNode = (nodeId: string) => {
-    setSelectedNodeId(nodeId);
+    // Skip if the same node is clicked again to prevent table breaking
+    if (nodeId === selectedNodeId) {
+      console.log('Node already selected:', nodeId);
+      return;
+    }
     
+    // Before changing selection, store information about the current node
+    const currentNode = findNodeById(treeData, selectedNodeId);
+    const newNode = findNodeById(treeData, nodeId);
+    
+    // Only update the selectedNodeId after we've captured the current node
+    setSelectedNodeId(nodeId);
+
+    // Reset selected modes ONLY when necessary:
+    // 1. When switching between different top-level collections 
+    // 2. When switching to a node with a different type (folder vs file)
+    if (newNode && currentNode) {
+      const isCurrentTopLevel = !currentNode.id.includes('-');
+      const isNewTopLevel = !newNode.id.includes('-');
+      
+      // Check if we're switching between completely different collections
+      // (only reset if both are top-level collections and they are different)
+      if ((isCurrentTopLevel && isNewTopLevel && currentNode.id !== newNode.id) || 
+          (currentNode.type !== newNode.type)) {
+        console.log('Switching between different collections or node types, resetting modes');
+    setSelectedModes([]);
+      } else {
+        console.log('Navigating within the same collection hierarchy, preserving modes');
+        // When staying in the same collection hierarchy, preserve the selected modes
+      }
+    } else if (!currentNode) {
+      // First selection, just set it without resetting
+      console.log('First node selection');
+    } else {
+      // Default case - reset modes when in doubt
+      console.log('Default case - resetting modes');
+      setSelectedModes([]);
+    }
+
     // Check if the selected node is a variable (file type)
     const findVariable = (nodes: TreeNode[]): TreeNode | null => {
       for (const node of nodes) {
@@ -1131,9 +1596,9 @@ function VisualEditor() {
       }
       return null;
     };
-    
+
     const selectedNode = findVariable(treeData);
-    
+
     // If a variable node is selected, find its data
     if (selectedNode && selectedNode.type === 'file') {
       const variableData = allVariables.find(v => v.id === selectedNode.id);
@@ -1143,118 +1608,514 @@ function VisualEditor() {
         // TODO: Implement variable editing UI
       }
     }
+    
+    // Force a refresh of the variables table when changing nodes
+    // This ensures the table re-renders with the correct data
+    setTimeout(() => {
+      setVariables([...variables]);
+    }, 10);
   };
 
-  // Function to convert variables to CSS format
-  const convertVariablesToCSS = () => {
-    // Group variables by collection for better organization
-    const variablesByCollection: Record<string, Variable[]> = {};
-    
-    // Use all variables for a complete export
-    allVariables.forEach(variable => {
-      if (!variablesByCollection[variable.collectionName]) {
-        variablesByCollection[variable.collectionName] = [];
+
+  // Helper function to find a node by ID in the tree
+  const findNodeById = (nodes: TreeNode[], id: string): TreeNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
       }
-      variablesByCollection[variable.collectionName].push(variable);
+      if (node.children) {
+        const found = findNodeById(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Helper function to format color values for Figma API (ensuring 0-1 range)
+  const formatColorForFigma = (value: unknown): RGBAValue => {
+    console.log('[DEBUG] formatColorForFigma input:', {
+      value,
+      type: typeof value,
+      isObject: typeof value === 'object' && value !== null,
+      hasRGB: typeof value === 'object' && value !== null && 'r' in value && 'g' in value && 'b' in value
     });
-    
-    // Build CSS string
-    let css = `:root {\n`;
-    
-    // Process each collection
-    Object.entries(variablesByCollection).forEach(([collectionName, vars]) => {
-      css += `  /* ${collectionName} */\n`;
-      
-      // Process each variable in this collection
-      vars.forEach(variable => {
-        // Format the variable name to proper CSS custom property format
-        // Replace spaces with hyphens and convert to lowercase
-        const varName = `--${collectionName.toLowerCase()}-${variable.name.toLowerCase().replace(/\s+/g, '-')}`;
-        
-        if (variable.isColor) {
-          // For color variables, use rgba()
-          if (variable.referencedVariable && variable.referencedVariable.finalValueType === 'color') {
-            // If it's a reference to another color, use the final value
-            const finalColor = variable.referencedVariable.finalValue as RGBAValue;
-            if (finalColor) {
-              const r = Math.round(finalColor.r * 255);
-              const g = Math.round(finalColor.g * 255);
-              const b = Math.round(finalColor.b * 255);
-              const a = finalColor.a || 1;
-              css += `  ${varName}: rgba(${r}, ${g}, ${b}, ${a});\n`;
-            } else {
-              // Fallback for missing reference
-              css += `  ${varName}: var(--${variable.referencedVariable.collection.toLowerCase()}-${variable.referencedVariable.name.toLowerCase().replace(/\s+/g, '-')});\n`;
-            }
-          } else {
-            // Direct color value
-            const rawColor = variable.rawValue as RGBAValue;
-            const r = Math.round(rawColor.r * 255);
-            const g = Math.round(rawColor.g * 255);
-            const b = Math.round(rawColor.b * 255);
-            const a = rawColor.a || 1;
-            css += `  ${varName}: rgba(${r}, ${g}, ${b}, ${a});\n`;
+
+    // If it's a string of RGB values like "241, 1, 1"
+    if (typeof value === 'string') {
+      // Handle the case where value is a comma-separated RGB string
+      try {
+        const sanitizedValue = value.trim().replace(/\s+/g, '');
+
+        if (sanitizedValue.includes(',')) {
+          // Format: "r, g, b"
+          const parts = sanitizedValue.split(',').map(val => parseInt(val.trim(), 10));
+          if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            const result = {
+              r: Math.max(0, Math.min(255, parts[0])) / 255, // Normalize to 0-1
+              g: Math.max(0, Math.min(255, parts[1])) / 255, // Normalize to 0-1 
+              b: Math.max(0, Math.min(255, parts[2])) / 255, // Normalize to 0-1
+              a: parts.length > 3 && !isNaN(parts[3]) ? Math.max(0, Math.min(1, parts[3])) : 1
+            };
+            console.log('[DEBUG] Parsed color string to RGBA:', result);
+            return result;
           }
-        } else {
-          // For non-color variables
-          if (variable.referencedVariable) {
-            // If it's a reference, create a reference to another variable
-            const refVarName = `--${variable.referencedVariable.collection.toLowerCase()}-${variable.referencedVariable.name.toLowerCase().replace(/\s+/g, '-')}`;
-            css += `  ${varName}: var(${refVarName});\n`;
-          } else {
-            // Direct value
-            css += `  ${varName}: ${variable.value};\n`;
+        } else if (sanitizedValue.startsWith('rgb')) {
+          // Format: "rgb(r,g,b)" or "rgba(r,g,b,a)"
+          const rgbMatch = sanitizedValue.match(/rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)/);
+          if (rgbMatch) {
+            const r = parseInt(rgbMatch[1], 10);
+            const g = parseInt(rgbMatch[2], 10);
+            const b = parseInt(rgbMatch[3], 10);
+            const a = rgbMatch[4] ? parseFloat(rgbMatch[4]) : 1;
+
+            const result = {
+              r: Math.max(0, Math.min(255, r)) / 255,
+              g: Math.max(0, Math.min(255, g)) / 255,
+              b: Math.max(0, Math.min(255, b)) / 255,
+              a: Math.max(0, Math.min(1, a))
+            };
+            console.log('[DEBUG] Parsed RGB string to RGBA:', result);
+            return result;
           }
         }
-      });
+      } catch (e) {
+        console.error("[DEBUG] Error parsing color string:", e);
+      }
+    }
+
+    // If it's already an RGBA object
+    if (value && typeof value === 'object' && 'r' in value && 'g' in value && 'b' in value) {
+      const rgba = value as RGBAValue;
       
-      css += '\n';
-    });
-    
-    css += `}\n`;
-    
-    // Add media queries for different themes if needed
-    if (allVariables.some(v => v.collectionName.toLowerCase().includes('dark'))) {
-      css += `\n@media (prefers-color-scheme: dark) {\n`;
-      css += `  :root {\n`;
-      css += `    /* Dark theme variables would go here */\n`;
-      css += `  }\n`;
-      css += `}\n`;
+      // Check if values are already in 0-1 range or need normalization
+      // Handle the special case where the values are exactly at 255, 0, etc.
+      const isAlreadyNormalized = rgba.r <= 1 && rgba.g <= 1 && rgba.b <= 1 && 
+                                 !(rgba.r === 0 && rgba.g === 0 && rgba.b === 0) && // Not likely exactly (0,0,0)
+                                 !(rgba.r === 1 && rgba.g === 1 && rgba.b === 1);   // Not likely exactly (1,1,1)
+      
+      // Always normalize to 0-1 range for Figma API
+      const result = {
+        r: isAlreadyNormalized ? rgba.r : rgba.r / 255,
+        g: isAlreadyNormalized ? rgba.g : rgba.g / 255,
+        b: isAlreadyNormalized ? rgba.b : rgba.b / 255,
+        a: rgba.a || 1
+      };
+      
+      return result;
+    }
+
+    // Default value for invalid input
+    console.warn("[DEBUG] Invalid color value provided to formatColorForFigma:", value);
+    return { r: 0, g: 0, b: 0, a: 1 };
+  };
+
+
+  // Function to handle saving edited variables
+  const handleSaveVariable = async (variable: Variable) => {
+    // Check if we're in a space that allows edits (only Test space)
+    const isEditAllowed = figmaConfig.isManualFileIdAllowed();
+    if (!isEditAllowed) {
+      setErrorMessage('Saving variables is not allowed in this space');
+      return;
     }
     
-    return css;
+    try {
+      // Make sure we have an ID before proceeding with update
+      if (!variable.id) {
+        setErrorMessage('Cannot update variable: missing ID');
+        return;
+      }
+
+      // MOST IMPORTANT CHANGE: Get the very latest value from our ref
+      // This ensures we have the most up-to-date data regardless of React's state batching
+      const refKey = `${variable.id}-${variable.modeId}`;
+      const latestVariableFromRef = latestVariableValues.current[refKey];
+
+      // Choose the latest source of truth in this priority:
+      // 1. Our ref (latestVariableFromRef) - most reliable and immediate
+      // 2. allVariables array - updated in state but might have batching delays
+      // 3. Original variable passed to the function - potentially oldest
+
+      let latestVariable: Variable;
+
+      if (latestVariableFromRef) {
+        // Use the latest ref value which is guaranteed to be current
+        console.log(`[DEBUG] Using latest value from ref for ${refKey}`);
+        latestVariable = latestVariableFromRef;
+      } else {
+        // Fall back to state array lookups
+        const latestVariableIndex = allVariables.findIndex(v =>
+          v.id === variable.id && v.modeId === variable.modeId
+        );
+
+        if (latestVariableIndex === -1) {
+          setErrorMessage('Cannot update variable: variable not found in current state');
+          return;
+        }
+        
+        latestVariable = allVariables[latestVariableIndex];
+        console.log(`[DEBUG] Using value from allVariables for ${refKey} as fallback`);
+      }
+
+      setIsLoading(true);
+      setLoadingMessage('Saving variable to Figma...');
+
+      // Get the file ID from config
+      const fileId = figmaConfig.getStoredFigmaFileId();
+      if (!fileId) {
+        throw new Error('No Figma file ID configured. Please configure a file ID first.');
+      }
+
+      // Find the variable collection ID - this is required for updates
+      let variableCollectionId = '';
+
+      if (figmaData?.meta?.variables && figmaData.meta.variableCollections) {
+        // Find the original variable to get its collection ID
+        const originalVariable = latestVariable.id ? figmaData.meta.variables[latestVariable.id] : undefined;
+        if (originalVariable) {
+          variableCollectionId = originalVariable.variableCollectionId;
+          console.log(`Found collection ID for variable: ${variableCollectionId}`);
+        }
+      }
+
+      if (!variableCollectionId) {
+        // If we couldn't find the ID directly, try to find it by collection name
+        if (figmaData?.meta?.variableCollections) {
+          for (const [id, collection] of Object.entries(figmaData.meta.variableCollections)) {
+            if (collection.name === latestVariable.collectionName) {
+              variableCollectionId = id;
+              console.log(`Found collection ID by name: ${variableCollectionId}`);
+              break;
+            }
+          }
+        }
+      }
+
+      if (!variableCollectionId) {
+        throw new Error('Could not find variable collection ID. This is required to update the variable.');
+      }
+
+      console.log('[DEBUG] Variable being saved (pre-formatting):', {
+        id: latestVariable.id,
+        name: latestVariable.name,
+        value: latestVariable.value,
+        rawValue: JSON.stringify(latestVariable.rawValue),
+        alpha: latestVariable.isColor && 
+               latestVariable.rawValue && 
+               typeof latestVariable.rawValue === 'object' && 
+               'a' in latestVariable.rawValue ? 
+               (latestVariable.rawValue as RGBAValue).a : 'not a color',
+        isColor: latestVariable.isColor,
+        valueType: latestVariable.valueType
+      });
+
+      // Ensure value is in the correct format for Figma API
+      let formattedValue: Record<string, unknown> | number | string | boolean | RGBAValue | null = latestVariable.rawValue;
+
+      // For variable references (aliases)
+      if (latestVariable.valueType === 'VARIABLE_ALIAS' && latestVariable.referencedVariable?.id) {
+        // Format variable alias reference for Figma API
+        formattedValue = {
+          type: "VARIABLE_ALIAS",
+          id: latestVariable.referencedVariable.id
+        };
+        
+        console.log('[DEBUG] Formatting variable alias reference for Figma API:', {
+          type: "VARIABLE_ALIAS",
+          id: latestVariable.referencedVariable.id,
+          referencedName: latestVariable.referencedVariable.name,
+          collection: latestVariable.referencedVariable.collection
+        });
+      }
+      // For color variables, ensure proper RGBA format
+      else if (latestVariable.isColor) {
+        try {
+          // For color variables, make sure we're sending a properly normalized RGBA object
+          if (latestVariable.rawValue && typeof latestVariable.rawValue === 'object' && 'r' in latestVariable.rawValue) {
+            // Log the raw color values before formatting
+            console.log('[DEBUG] Raw color values before formatting:', latestVariable.rawValue);
+            
+            // We already have an RGBA object, just need to normalize it
+            formattedValue = formatColorForFigma(latestVariable.rawValue);
+          } else if (typeof latestVariable.value === 'string') {
+            // We have a string value, try to parse it
+            console.log('[DEBUG] Parsing color from string:', latestVariable.value);
+            formattedValue = formatColorForFigma(latestVariable.value);
+          } else {
+            throw new Error(`Unable to format color value: ${JSON.stringify(latestVariable.rawValue)}`);
+          }
+
+          console.log('[DEBUG] Formatted color value for Figma API:', {
+            formattedValue: JSON.stringify(formattedValue),
+            alpha: formattedValue && 
+                  typeof formattedValue === 'object' && 
+                  'a' in formattedValue ? 
+                  (formattedValue as RGBAValue).a : 'missing alpha',
+            rawRGBA: formattedValue
+          });
+        } catch (err) {
+          console.error('[DEBUG] Error formatting color value:', err);
+          throw new Error(`Failed to format color value: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      // Prepare the API request data using the correct structure
+      const variableData = {
+        variables: [
+          {
+            action: "UPDATE",
+            id: latestVariable.id!,
+            variableCollectionId: variableCollectionId,
+          }
+        ],
+        variableModeValues: [
+          {
+            variableId: latestVariable.id!,
+            modeId: latestVariable.modeId,
+            value: formattedValue
+          }
+        ]
+      };
+
+      // Log the final payload with special attention to alpha channel
+      console.log('[DEBUG] Payload structure for Figma API:', JSON.stringify(variableData, null, 2));
+      
+      // Extra detailed log specifically for alpha value in the final payload
+      if (latestVariable.isColor && formattedValue && typeof formattedValue === 'object' && 'a' in formattedValue) {
+        console.log('[DEBUG] FINAL ALPHA VALUE BEING SENT TO FIGMA:', {
+          alpha: (formattedValue as RGBAValue).a,
+          r: (formattedValue as RGBAValue).r,
+          g: (formattedValue as RGBAValue).g,
+          b: (formattedValue as RGBAValue).b,
+          fullObject: formattedValue
+        });
+      }
+
+      // Send to Figma API
+      await figmaApi.postVariables(fileId, variableData);
+
+      // Clear the editing state for this variable
+      if (latestVariable.id && editingVariables[`${latestVariable.id}-${latestVariable.modeId}`]) {
+        setEditingVariables(prev => ({
+          ...prev,
+          [`${latestVariable.id}-${latestVariable.modeId}`]: false
+        }));
+      }
+
+      // After successful save, clear the ref for this variable
+      if (latestVariable.id) {
+        delete latestVariableValues.current[`${latestVariable.id}-${latestVariable.modeId}`];
+      }
+
+      // IMPORTANT: Force UI refresh by updating both variables arrays
+      // This ensures all color previews and displays will refresh with the new values
+      setVariables([...variables]);
+      
+      // Also trigger a refresh in allVariables to ensure all views have the latest data
+      setAllVariables([...allVariables]);
+
+      setLoadingMessage('Variable saved successfully!');
+      setTimeout(() => {
+        setLoadingMessage('');
+        setIsLoading(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error saving variable:', error);
+
+      // Extract detailed error message if available
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      // Check for Axios error with response data
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as {
+          response?: {
+            data?: {
+              message?: string;
+              status?: number;
+            }
+          }
+        };
+
+        if (axiosError.response?.data?.message) {
+          errorMessage = `Figma API Error: ${axiosError.response.data.message}`;
+        }
+      }
+
+      setErrorMessage(`Error saving variable: ${errorMessage}`);
+      setIsLoading(false);
+    }
   };
 
-  // Handle Export button click
-  const handleExport = () => {
-    const css = convertVariablesToCSS();
-    setCssVariables(css);
-    setShowExportModal(true);
+
+
+  // Helper function to get modes for the current collection
+  const getCurrentCollectionModes = () => {
+    if (!selectedNodeId || !figmaData?.meta?.variableCollections) return [];
+
+    // Find the collection for the selected node
+    const selectedNode = findNodeById(treeData, selectedNodeId);
+    if (!selectedNode) return [];
+
+    // Get collection ID
+    let collectionId = '';
+    for (const [id, collection] of Object.entries(figmaData.meta.variableCollections)) {
+      if (collection.name === selectedNode.name) {
+        collectionId = id;
+        break;
+      }
+    }
+
+    if (!collectionId) return [];
+
+    // Get modes for this collection
+    const collection = figmaData.meta.variableCollections[collectionId];
+    return collection?.modes || [];
   };
 
-  // Function to download the CSS file
-  const handleDownloadCSS = () => {
-    const element = document.createElement('a');
-    const file = new Blob([cssVariables], {type: 'text/css'});
-    element.href = URL.createObjectURL(file);
-    element.download = 'design-system-variables.css';
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+  // Update available modes when selected node changes
+  useEffect(() => {
+    const modes = getCurrentCollectionModes();
+    setAvailableModes(modes);
+
+    // Select the first mode by default
+    if (modes.length > 0 && selectedModes.length === 0) {
+      setSelectedModes([modes[0]]);
+    }
+  }, [selectedNodeId, figmaData]);
+
+  // Add this function after handleVariableValueChange function
+  const handleCancelVariableChanges = (variable: Variable) => {
+    if (!variable.id) return;
+
+    // Use the original figmaData to find the original variable value
+    if (figmaData?.meta?.variables && variable.id) {
+      const figmaVariable = figmaData.meta.variables[variable.id];
+      if (figmaVariable) {
+        // Get the original value from Figma data
+        // Find the same variable in our arrays to update it
+        const variablesIndex = variables.findIndex(v =>
+          v.id === variable.id && v.modeId === variable.modeId
+        );
+
+        const allVariablesIndex = allVariables.findIndex(v =>
+          v.id === variable.id && v.modeId === variable.modeId
+        );
+
+        if (variablesIndex !== -1) {
+          // Update variables array
+          const updatedVariables = [...variables];
+
+          // We need to restore the original variable state from our initial data
+          const collectionVariables = variables.filter(v => v.id === variable.id);
+          const originalVar = collectionVariables.find(v => v.modeId === variable.modeId);
+
+          if (originalVar) {
+            updatedVariables[variablesIndex] = { ...originalVar };
+            setVariables(updatedVariables);
+          }
+        }
+
+        if (allVariablesIndex !== -1) {
+          // Update allVariables array
+          const updatedAllVariables = [...allVariables];
+
+          // We need to restore the original variable state from our initial data
+          const collectionAllVariables = allVariables.filter(v => v.id === variable.id);
+          const originalAllVar = collectionAllVariables.find(v => v.modeId === variable.modeId);
+
+          if (originalAllVar) {
+            updatedAllVariables[allVariablesIndex] = { ...originalAllVar };
+            setAllVariables(updatedAllVariables);
+          }
+        }
+      }
+    }
+
+    // Clear editing state for this variable to exit edit mode
+    setEditingVariables(prev => {
+      const updated = { ...prev };
+      delete updated[`${ variable.id }-${ variable.modeId }`];
+      return updated;
+    });
+  };
+
+  // Helper function to create hierarchical folder structure from variable names
+  const createHierarchicalStructure = (variables: TreeNode[]): TreeNode[] => {
+    const rootFolders: TreeNode[] = [];
+    
+    // Process each variable to create a hierarchical structure
+    variables.forEach((variableNode: TreeNode) => {
+      const nameParts = variableNode.name.split('/');
+      
+      // No slashes in name, add directly to root
+      if (nameParts.length === 1) {
+        rootFolders.push(variableNode);
+        return;
+      }
+      
+      // Last part is the actual variable name
+      const actualName = nameParts.pop() || '';
+      
+      // Find or create each folder in the path
+      let currentLevel = rootFolders;
+      let currentPath = '';
+      
+      // Process each folder in the path
+      nameParts.forEach((folderName: string) => {
+        currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+        
+        // Look for existing folder at this level
+        let folderNode = currentLevel.find(node => 
+          node.type === 'folder' && node.name === folderName
+        );
+        
+        // Create folder if it doesn't exist
+        if (!folderNode) {
+          folderNode = {
+            id: `${collectionId}-folder-${currentPath}`,
+            name: folderName,
+            type: 'folder',
+            isExpanded: false,
+            children: []
+          };
+          currentLevel.push(folderNode);
+        }
+        
+        // Move to next level (this folder's children)
+        currentLevel = folderNode.children as TreeNode[];
+      });
+      
+      // Create a new node for the variable with updated name
+      const leafNode: TreeNode = {
+        ...variableNode,
+        name: actualName // Use the last part after the final slash
+      };
+      
+      // Add to the current level
+      currentLevel.push(leafNode);
+    });
+    
+    return rootFolders;
   };
 
   return (
     <div className="app-container">
       <div className="sidebar">
         <div className="sidebar-header">
-          <img src={NeuronLogo} alt="NEURON Logo" className="sidebar-logo" />
+          <img src={ NeuronLogo } alt="NEURON Logo" className="sidebar-logo" />
+          <div className="space-indicator">
+            Space: {spaceOptions.find(o => o.value === selectedSpace)?.label || 'Test'}
+          </div>
         </div>
         <div className="sidebar-content">
           <TreeView 
-            nodes={treeData} 
-            onToggle={handleToggleNode}
-            onSelect={handleSelectNode}
-            selectedNodeId={selectedNodeId}
+            nodes={ treeData }
+            onToggle={ handleToggleNode }
+            onSelect={ handleSelectNode }
+            selectedNodeId={ selectedNodeId }
           />
         </div>
       </div>
@@ -1265,605 +2126,300 @@ function VisualEditor() {
             <div className="header-title">Visual Editor</div>
             <div className="figma-file-name">Figma Design System - v2.0</div>
           </div>
+          
+          {/* Add debug component below the header */}
+          <SpaceDebugInfo selectedSpace={selectedSpace} />
         </div>
         
         <div className="main-area">
           <div className="editor-top-section">
+            <div className="selectors-container">
             <div className="selected-brand-section">
               <label>Selected Brand</label>
               <div className="brand-dropdown-container">
               <Select
                 className="react-select-container"
                 classNamePrefix="react-select"
-                  value={selectedBrand}
-                  options={brandOptions}
-                  components={{
+                    value={ selectedBrand }
+                    options={ availableBrandOptions }
+                    isMulti
+                    components={ {
                     DropdownIndicator: () => (
                       <div className="custom-dropdown-arrow">▼</div>
                     )
-                  }}
-                  onChange={(option) => {
-                    if (option) {
-                      console.log('Selected brand:', option);
-                      setSelectedBrand(option);
-                    }
-                  }}
-                />
+                    } }
+                    onChange={ (options) => {
+                      if (options && options.length > 0) {
+                        console.log('Selected brands:', options);
+                        setSelectedBrand(options as SelectOption[]);
+                      } else {
+                        // If all options are removed, keep the first one selected
+                        setSelectedBrand([availableBrandOptions[0]]);
+                      }
+                    } }
+                  />
+                </div>
+              </div>
+
+              <div className="selected-theme-section">
+                <label>Theme</label>
+                <div className="theme-dropdown-container">
+                  <Select
+                    className="react-select-container"
+                    classNamePrefix="react-select"
+                    value={ selectedThemes }
+                    options={ availableThemeOptions }
+                    isMulti
+                    components={ {
+                      DropdownIndicator: () => (
+                        <div className="custom-dropdown-arrow">▼</div>
+                      )
+                    } }
+                    onChange={ (options) => {
+                      if (options && options.length > 0) {
+                        console.log('Selected themes:', options);
+                        setSelectedThemes(options as SelectOption[]);
+                      } else {
+                        // If all options are removed, keep the first one selected
+                        setSelectedThemes([availableThemeOptions[0]]);
+                      }
+                    } }
+                  />
+                </div>
             </div>
+              
+              {/* Mode selector moved from VariablesList to here */}
+              {availableModes.length > 0 && (
+                <div className="selected-mode-section">
+                  <label>Modes From Mapped File</label>
+                  <div className="mode-dropdown-container">
+                    <Select
+                      isMulti
+                      className="react-select-container modes-select-container"
+                      classNamePrefix="react-select"
+                      placeholder="Select modes to display"
+                      value={selectedModes.map(mode => ({
+                        value: mode.modeId,
+                        label: mode.name
+                      }))}
+                      options={availableModes.map(mode => ({
+                        value: mode.modeId,
+                        label: mode.name
+                      }))}
+                      components={ {
+                        DropdownIndicator: () => (
+                          <div className="custom-dropdown-arrow">▼</div>
+                        )
+                      } }
+                      onChange={(options) => {
+                        // Handle empty selection - always keep at least one mode
+                        if (!options || options.length === 0) {
+                          if (availableModes.length > 0) {
+                            setSelectedModes([availableModes[0]]);
+                          }
+                          return;
+                        }
+
+                        // Update selected modes
+                        const newSelectedModes = options.map(option => {
+                          const mode = availableModes.find(m => m.modeId === option.value);
+                          return mode || { modeId: option.value, name: option.label };
+                        });
+
+                        setSelectedModes(newSelectedModes);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
           </div>
             
             <div className="action-buttons">
-              <button className="action-button" onClick={handlePullFromFigma}>
+              <Button 
+                variant="primary"
+                onClick={handlePullFromFigma}
+              >
                 {isLoading ? (
                   <>
-                    <span className="spinner"></span>
+                    <span className="spinner" />
                     <span>Loading...</span>
                   </>
                 ) : 'Sync'}
-              </button>
-              <button className="action-button">Update</button>
-              <button className="action-button" onClick={handleExport}>Export</button>
-        </div>
+              </Button>
+              <MappingPreview allVariables={allVariables}
+                figmaData={figmaData}
+                modeMapping={modeMapping}
+                selectedModes={selectedModes}
+                selectedBrand={selectedBrand}
+                selectedGrade={selectedGrade}
+                selectedDevice={selectedDevice}
+                selectedThemes={selectedThemes}
+              />
+             </div>
         
-        {loadingMessage && (
+            {loadingMessage && (
           <div className="status-message success-message">
-            {loadingMessage}
+                {loadingMessage}
           </div>
-        )}
+            )}
         
-        {errorMessage && (
+            {errorMessage && (
           <div className="status-message error-message">
-            {errorMessage}
-            <button className="dismiss-button" onClick={() => setErrorMessage(null)}>×</button>
+                {errorMessage}
+                <Button 
+                  variant="primary"
+                  danger
+                  className="dismiss-button" 
+                  onClick={() => setErrorMessage(null)}
+                >
+                  ×
+                </Button>
           </div>
-        )}
-
-            <div className="variables-path">
-              global<span>›</span>colors<span>›</span>primary
-          </div>
-            
-            <div className="variables-filters">
-              <div className="filter-item">
-            <Select
-              className="react-select-container"
-              classNamePrefix="react-select"
-                  placeholder="Filter by Type"
-                  options={[
-                    { value: 'color', label: 'Color' },
-                    { value: 'typography', label: 'Typography' },
-                    { value: 'spacing', label: 'Spacing' }
-                  ]}
-                  isClearable
-                  onChange={(option) => {
-                    console.log('Selected type:', option);
-                  }}
-            />
-          </div>
-              <div className="filter-item">
-            <Select
-              className="react-select-container"
-              classNamePrefix="react-select"
-                  placeholder="Filter by Group"
-                  options={[
-                    { value: 'primary', label: 'Primary' },
-                    { value: 'secondary', label: 'Secondary' },
-                    { value: 'error', label: 'Error' }
-                  ]}
-                  isClearable
-                  onChange={(option) => {
-                    console.log('Selected group:', option);
-                  }}
-            />
-          </div>
-          </div>
+            )}
         </div>
 
           <div className="content-area">
-            {selectedNodeId && (
+            { selectedNodeId && (
               <div className="variable-details">
-                {/* Find the selected variable */}
+                {/* Find the selected node */}
                 {(() => {
-                  // Find the selected node first
-                  const findNode = (nodes: TreeNode[]): TreeNode | null => {
-                    for (const node of nodes) {
-                      if (node.id === selectedNodeId) {
-                        return node;
-                      }
-                      if (node.children) {
-                        const found = findNode(node.children);
-                        if (found) return found;
-                      }
-                    }
-                    return null;
-                  };
+                  const selectedNode = findNodeById(treeData, selectedNodeId);
                   
-                  const selectedNode = findNode(treeData);
+                  // If no node is found or has been selected
+                  if (!selectedNode) return null;
                   
-                  // If it's a folder, show its contents
-                  if (selectedNode && selectedNode.type === 'folder') {
-                    // Find all variables that belong to this folder
-                    let folderVariables: Variable[] = [];
+                  // If it's a folder, show its variables using VariablesList component
+                  if (selectedNode.type === 'folder') {
+                    // Filter variables to only show those belonging to the selected collection
+                    const getVariablesForSelectedCollection = (node: TreeNode, allVars: Variable[]) => {
+                      // If this is a top-level collection node (doesn't have a parent collection)
+                      if (!node.id.includes('-')) {
+                        // For a top-level collection, we need to check the collectionName property
+                        const collectionName = node.name;
+                        const collectionVars = allVars.filter(v => v.collectionName === collectionName);
+                        
+                        // Deduplicate variables by ID - we want to show one row per variable with different modes as columns
+                        // Create a map to group variables by their ID
+                        const uniqueVarsMap = new Map<string, Variable>();
+                        
+                        // Keep only one instance of each variable (by ID)
+                        // We'll display different mode values using columns instead of duplicating rows
+                        collectionVars.forEach(variable => {
+                          if (variable.id && !uniqueVarsMap.has(variable.id)) {
+                            uniqueVarsMap.set(variable.id, variable);
+                          }
+                        });
+                        
+                        // Convert map back to array
+                        const uniqueVars = Array.from(uniqueVarsMap.values());
+                        console.log(`Deduped from ${collectionVars.length} to ${uniqueVars.length} unique variables`);
+                        return uniqueVars;
+                      } 
+                      
+                      // For variables in a specific node, find all variables contained in this node's children
+                      const childVariableIds = new Set<string>();
+                      const collectVariableIds = (node: TreeNode) => {
+                        if (node.type === 'file' && node.id) {
+                          childVariableIds.add(node.id);
+                        }
+                        if (node.children) {
+                          node.children.forEach(child => collectVariableIds(child));
+                        }
+                      };
+                      
+                      // Collect all variable IDs in this folder and its subfolders
+                      collectVariableIds(node);
+                      
+                      // Now filter variables to only include those in the collected IDs
+                      // and deduplicate to show only one entry per variable
+                      const folderVars = allVars.filter(v => v.id && childVariableIds.has(v.id));
+                      
+                      // Deduplicate variables by ID - group by ID
+                      const uniqueVarsMap = new Map<string, Variable>();
+                      
+                      // Keep only one instance of each variable (by ID)
+                      folderVars.forEach(variable => {
+                        if (variable.id && !uniqueVarsMap.has(variable.id)) {
+                          uniqueVarsMap.set(variable.id, variable);
+                        }
+                      });
+                      
+                      // Convert map back to array
+                      const uniqueVars = Array.from(uniqueVarsMap.values());
+                      console.log(`Deduped from ${folderVars.length} to ${uniqueVars.length} unique variables`);
+                      return uniqueVars;
+                    };
                     
-                    // If this is a collection folder (top-level)
-                    if (selectedNode.id.indexOf('-') === -1) {
-                      // Collection folder - find all variables in this collection
-                      folderVariables = allVariables.filter(v => 
-                        v.collectionName === selectedNode.name
-                      );
-                    } else {
-                      // Type folder (e.g., Colors) - find all variables of this type in the collection
-                      const [collectionId, variableType] = selectedNode.id.split('-');
-                      const collectionNode = treeData.find(node => node.id === collectionId);
-                      
-                      if (collectionNode) {
-                        // Find all variables that match this type and collection
-                        folderVariables = allVariables.filter(v => 
-                          v.collectionName === collectionNode.name && 
-                          v.valueType.toLowerCase() === variableType
-                        );
-                      }
-                      
-                      // If using direct children from the tree instead
-                      if (folderVariables.length === 0 && selectedNode.children) {
-                        // Use the node's children IDs to find variables
-                        const childIds = selectedNode.children.map(child => child.id);
-                        folderVariables = allVariables.filter(v => childIds.includes(v.id));
-                      }
-                    }
+                    // Get variables only for the selected collection or folder
+                    const filteredVariables = getVariablesForSelectedCollection(selectedNode, allVariables);
+                    
+                    console.log(`Filtered ${allVariables.length} variables to ${filteredVariables.length} for collection: ${selectedNode.name}`);
                     
                     return (
-                      <div className="folder-contents">
-                        <h2>{selectedNode.name}</h2>
-                        <p className="folder-description">
-                          {folderVariables.length} variable{folderVariables.length !== 1 ? 's' : ''} found
-                        </p>
-                        
-                        {folderVariables.length > 0 && (
-        <div className="variables-table">
-            <table>
-              <thead>
-                <tr>
-                                  <th style={{ width: '40px' }}></th>
-                                  <th>Name</th>
-                  <th>Value</th>
-                                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                                {folderVariables.map((variable) => (
-                                  <tr 
-                                    key={`${variable.id}-${variable.modeId}`}
-                                    className="variable-row"
-                                  >
-                                    <td>
-                                      {variable.isColor && (
-                        <div 
-                          className="color-preview" 
-                          style={{ 
-                                            backgroundColor: variable.referencedVariable && variable.referencedVariable.finalValueType === 'color'
-                                              ? `rgba(${variable.value}, ${(variable.referencedVariable.finalValue as RGBAValue)?.a || 1})`
-                                              : `rgba(${variable.value}, ${(variable.rawValue as RGBAValue).a})`,
-                                            width: '24px',
-                                            height: '24px',
-                            borderRadius: '4px',
-                                            border: '1px solid #ddd'
-                                          }}
-                                        />
-                                      )}
-                                    </td>
-                                    <td>{variable.name}</td>
-                                    <td className="value-cell">
-                                      <VariableDropdown 
-                                        variable={variable}
-                                        allVariables={allVariables}
-                                        onValueChange={handleVariableValueChange}
-                                      />
-                                    </td>
-                                    <td>
-                                      {variable.referencedVariable ? (
-                                        <div className="reference-type" title={`Variable ID: ${variable.referencedVariable.id}`}>
-                                          <span className="reference-indicator">→</span>
-                                          <span>{variable.valueType}</span>
-                                          <div className="reference-details">
-                                            Reference to: <span className="reference-name">
-                                              {(() => {
-                                                // Try to find the original variable name if it's missing
-                                                let refName = variable.referencedVariable.name;
-                                                if (!refName || refName === 'undefined') {
-                                                  // Look for the variable by ID in allVariables
-                                                  const originalVar = allVariables.find(v => v.id === variable.referencedVariable?.id);
-                                                  refName = originalVar?.name || `Variable (${variable.referencedVariable.id.substring(0, 8)}...)`;
-                                                }
-                                                return `${refName} (${variable.referencedVariable.collection})`;
-                                              })()}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        variable.valueType
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
+                      <VariablesList
+                        selectedNode={selectedNode}
+                        treeData={treeData}
+                        variables={filteredVariables}
+                        allVariables={allVariables}
+                        selectedNodeId={selectedNodeId}
+                        selectedBrand={selectedBrand}
+                        selectedGrade={selectedGrade}
+                        selectedDevice={selectedDevice}
+                        selectedThemes={selectedThemes}
+                        modeMapping={modeMapping}
+                        selectedModes={selectedModes}
+                        availableModes={availableModes}
+                        figmaData={figmaData}
+                        formatColorForFigma={formatColorForFigma}
+                        editingVariables={editingVariables}
+                        setSelectedModes={setSelectedModes}
+                        setEditingVariables={setEditingVariables}
+                        setIsLoading={setIsLoading}
+                        setLoadingMessage={setLoadingMessage}
+                        setErrorMessage={setErrorMessage}
+                        handleVariableValueChange={handleVariableValueChange}
+                        handleSaveVariable={handleSaveVariable}
+                        handleCancelVariableChanges={handleCancelVariableChanges}
+                        handleSelectNode={handleSelectNode}
+                        processVariableData={processVariableData}
+                      />
                     );
                   }
                   
-                  // If it's a variable (file), show its details
-                  if (selectedNode && selectedNode.type === 'file') {
+                  // If it's a file (variable), show its details using VariableDetails component
+                  if (selectedNode.type === 'file') {
                     const variableData = allVariables.find(v => v.id === selectedNode.id);
-                    
+    
                     if (variableData) {
                       return (
-                        <div className="variable-editor">
-                          <h2>{variableData.name}</h2>
-                          <div className="variable-properties">
-                            <div className="property-row">
-                              <div className="property-label">Type:</div>
-                              <div className="property-value">{variableData.valueType}</div>
-                            </div>
-                            
-                            <div className="property-row">
-                              <div className="property-label">Value:</div>
-                              <div className="property-value">
-                                {variableData.isColor ? (
-                                  <div className="color-editor">
-                                    <input 
-                                      type="text"
-                                      value={variableData.value}
-                                      onChange={(e) => {
-                                        const index = variables.findIndex(v => v.id === variableData.id && v.modeId === variableData.modeId);
-                                        if (index !== -1) {
-                                          handleVariableValueChange(variables[index], e.target.value);
-                                        }
-                                      }}
-                                    />
-                                    <div 
-                                      className="color-preview" 
-                                style={{ 
-                                        backgroundColor: `rgba(${variableData.value}, ${(variableData.rawValue as RGBAValue).a})`,
-                                        width: '30px',
-                                        height: '30px',
-                                  borderRadius: '4px',
-                                  border: '1px solid #ddd'
-                                }} 
-                                      onClick={(e) => {
-                                        const index = variables.findIndex(v => v.id === variableData.id && v.modeId === variableData.modeId);
-                                        if (index !== -1) {
-                                          // Call original function with the index
-                                          const variable = variables[index];
-                                          if (!variable.isColor) return;
-                                          
-                                          const rgba = variable.rawValue as RGBAValue;
-                                          
-                                          // Set the active color for the picker
-                                          setActiveColorIndex(index);
-                                          setTempColor({
-                                            r: Math.round(rgba.r * 255),
-                                            g: Math.round(rgba.g * 255),
-                                            b: Math.round(rgba.b * 255),
-                                            a: rgba.a
-                                          });
-                                          
-                                          // Calculate position for the popover
-                                          const rect = e.currentTarget.getBoundingClientRect();
-                                          setColorPickerPosition({
-                                            top: rect.bottom + window.scrollY + 5,
-                                            left: rect.left + window.scrollX - 100 // Center the popover
-                                          });
-                                          
-                                          // Show the color picker
-                                          setShowColorPicker(true);
-                                        }
-                                      }}
-                                    />
-                            </div>
-                                ) : (
-                                  <span>{variableData.value}</span>
-                                )}
-                          </div>
-                            </div>
-                            
-                            <div className="property-row">
-                              <div className="property-label">Collection:</div>
-                              <div className="property-value">{variableData.collectionName}</div>
-                            </div>
-                          </div>
-                        </div>
+                        <VariableDetails
+                          variableData={variableData}
+                          editingVariables={editingVariables}
+                          setEditingVariables={setEditingVariables}
+                          handleVariableValueChange={handleVariableValueChange}
+                          handleSaveVariable={handleSaveVariable}
+                          allVariables={allVariables}
+                        />
                       );
                     }
-                    }
-                    
-                    return (
-                    <div className="no-selection">
-                      <p>Select a variable from the sidebar to view its details.</p>
-                            </div>
-                  );
+                  }
+                  
+                  return null;
                 })()}
               </div>
-            )}
-            {!selectedNodeId && (
-              <div className="no-selection">
-                <p>Select a variable from the sidebar to view its details.</p>
-              </div>
-          )}
-        </div>
-        </div>
-      </div>
-
-      {/* Color picker popup */}
-      {showColorPicker && activeColorIndex !== null && (
-        <div 
-          className="color-picker-popover"
-          style={{
-            top: `${colorPickerPosition.top}px`,
-            left: `${colorPickerPosition.left}px`
-          }}
-        >
-          <div className="color-picker-header">
-            <h3>Edit Color</h3>
-            <button className="close-button" onClick={handleCloseColorPicker}>×</button>
-          </div>
-          <div className="color-picker-content">
-            <div className="color-preview-large" 
-              style={{ 
-                backgroundColor: `rgba(${tempColor.r}, ${tempColor.g}, ${tempColor.b}, ${tempColor.a})`
-              }} 
-            />
-            
-            {/* Color gradient selector */}
-            <div className="color-gradient">
-              <div className="hue-slider">
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="360" 
-                  className="hue-range"
-                  onChange={(e) => {
-                    // Convert hue to RGB and update tempColor
-                    const hue = parseInt(e.target.value);
-                    const rgb = hueToRgb(hue);
-                    setTempColor({...tempColor, ...rgb});
-                  }}
-                />
-              </div>
-              <div className="saturation-brightness-area"
-                style={{
-                  backgroundColor: `hsl(${rgbToHue(tempColor.r, tempColor.g, tempColor.b)}, 100%, 50%)`
-                }}
-                onClick={(e) => {
-                  // Calculate saturation and brightness from click position
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = e.clientX - rect.left; // x position within the element
-                  const y = e.clientY - rect.top;  // y position within the element
-                  
-                  const s = Math.max(0, Math.min(100, (x / rect.width) * 100));
-                  const v = Math.max(0, Math.min(100, 100 - (y / rect.height) * 100));
-                  
-                  // Convert HSV to RGB
-                  const hue = rgbToHue(tempColor.r, tempColor.g, tempColor.b);
-                  const rgb = hsvToRgb(hue, s / 100, v / 100);
-                  setTempColor({...tempColor, ...rgb});
-                }}
-              >
-                <div className="saturation-brightness-pointer"
-                  style={{
-                    left: `${getSaturation(tempColor.r, tempColor.g, tempColor.b) * 100}%`,
-                    top: `${100 - getBrightness(tempColor.r, tempColor.g, tempColor.b) * 100}%`
-                  }}
-                />
-              </div>
-            </div>
-            
-            <div className="color-inputs">
-              <div className="color-input-group">
-                <label>R:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="255" 
-                  value={tempColor.r}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 255) {
-                      setTempColor({...tempColor, r: value});
-                    }
-                  }}
-                />
-              </div>
-              <div className="color-input-group">
-                <label>G:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="255" 
-                  value={tempColor.g}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 255) {
-                      setTempColor({...tempColor, g: value});
-                    }
-                  }}
-                />
-              </div>
-              <div className="color-input-group">
-                <label>B:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="255" 
-                  value={tempColor.b}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 255) {
-                      setTempColor({...tempColor, b: value});
-                    }
-                  }}
-                />
-              </div>
-              <div className="color-input-group">
-                <label>A:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="1" 
-                  step="0.1"
-                  value={tempColor.a}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value >= 0 && value <= 1) {
-                      setTempColor({...tempColor, a: value});
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            
-            <div className="color-actions">
-              <button onClick={() => {
-                handleColorChange(tempColor);
-                setShowColorPicker(false);
-              }}>Apply</button>
-              <button onClick={handleCloseColorPicker}>Cancel</button>
-            </div>
+            ) }
           </div>
         </div>
-      )}
-
-      {/* Export CSS Modal */}
-      {showExportModal && (
-        <div className="modal-overlay">
-          <div className="modal-container">
-            <div className="modal-header">
-              <h2>Export CSS Variables</h2>
-              <button 
-                className="close-button" 
-                onClick={() => setShowExportModal(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-content">
-              <div className="css-preview">
-                <pre>{cssVariables}</pre>
-              </div>
-              <div className="modal-actions">
-                <button 
-                  className="action-button" 
-                  onClick={handleDownloadCSS}
-                >
-                  Download CSS
-                </button>
-                <button 
-                  className="action-button secondary" 
-                  onClick={() => setShowExportModal(false)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
-  )
-}
+    </div>
+  );
+});
 
-// Helper functions for color conversion
-
-// Convert hue to RGB
-const hueToRgb = (hue: number): {r: number, g: number, b: number} => {
-  const h = hue / 60;
-  const c = 255;
-  const x = 255 * (1 - Math.abs((h % 2) - 1));
-
-  if (h >= 0 && h < 1) return { r: c, g: x, b: 0 };
-  if (h >= 1 && h < 2) return { r: x, g: c, b: 0 };
-  if (h >= 2 && h < 3) return { r: 0, g: c, b: x };
-  if (h >= 3 && h < 4) return { r: 0, g: x, b: c };
-  if (h >= 4 && h < 5) return { r: x, g: 0, b: c };
-  return { r: c, g: 0, b: x };
-};
-
-// Convert RGB to hue
-const rgbToHue = (r: number, g: number, b: number): number => {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  
-  if (max === min) return 0;
-  
-  let h = 0;
-  const d = max - min;
-  
-  if (max === r) {
-    h = (g - b) / d + (g < b ? 6 : 0);
-  } else if (max === g) {
-    h = (b - r) / d + 2;
-  } else {
-    h = (r - g) / d + 4;
-  }
-  
-  return h * 60;
-};
-
-// Get saturation from RGB (0-1)
-const getSaturation = (r: number, g: number, b: number): number => {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  
-  if (max === 0) return 0;
-  
-  return (max - min) / max;
-};
-
-// Get brightness from RGB (0-1)
-const getBrightness = (r: number, g: number, b: number): number => {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  
-  return Math.max(r, g, b);
-};
-
-// Convert HSV to RGB
-const hsvToRgb = (h: number, s: number, v: number): {r: number, g: number, b: number} => {
-  const c = v * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = v - c;
-  
-  let r = 0, g = 0, b = 0;
-  
-  if (h >= 0 && h < 60) {
-    r = c; g = x; b = 0;
-  } else if (h >= 60 && h < 120) {
-    r = x; g = c; b = 0;
-  } else if (h >= 120 && h < 180) {
-    r = 0; g = c; b = x;
-  } else if (h >= 180 && h < 240) {
-    r = 0; g = x; b = c;
-  } else if (h >= 240 && h < 300) {
-    r = x; g = 0; b = c;
-  } else {
-    r = c; g = 0; b = x;
-  }
-  
-  return {
-    r: Math.round((r + m) * 255),
-    g: Math.round((g + m) * 255),
-    b: Math.round((b + m) * 255)
-  };
-};
+// Define space options for display purposes
+const spaceOptions = [
+  { value: figmaConfig.SPACES.TEST, label: 'Test' },
+  { value: figmaConfig.SPACES.NEURON, label: 'Neuron' },
+  { value: figmaConfig.SPACES.HMH, label: 'HMH' }
+];
 
 export default VisualEditor 

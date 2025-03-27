@@ -1,0 +1,71 @@
+/* VariableDetails styles */
+.variable-editor {
+  padding: 24px;
+  max-width: 800px;
+  
+  h2 {
+    margin-top: 0;
+    margin-bottom: 24px;
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .variable-properties {
+    margin-bottom: 32px;
+    
+    .property-row {
+      display: flex;
+      margin-bottom: 16px;
+      align-items: center;
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
+      
+      .property-label {
+        width: 120px;
+        font-weight: 500;
+        color: #666;
+      }
+      
+      .property-value {
+        flex: 1;
+        
+        input {
+          padding: 8px 12px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 14px;
+          width: 100%;
+          max-width: 300px;
+          
+          &:focus {
+            outline: none;
+            border-color: #4b9aff;
+            box-shadow: 0 0 0 2px rgba(75, 154, 255, 0.2);
+          }
+        }
+        
+        .color-editor {
+          display: flex;
+          align-items: center;
+          
+          .color-preview {
+            margin-right: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            
+            &:hover {
+              transform: scale(1.1);
+            }
+          }
+          
+          input {
+            max-width: 240px;
+          }
+        }
+      }
+    }
+  }
+} 

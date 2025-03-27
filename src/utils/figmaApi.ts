@@ -1,16 +1,23 @@
 import axios from 'axios';
+import figmaConfig from './figmaConfig';
 
-// Access the Figma token from environment variables
-// In Vite, we use import.meta.env instead of process.env
-export const FIGMA_TOKEN = import.meta.env.VITE_FIGMA_TOKEN;
+// Create a function to get the current Figma token based on the selected space
+const getFigmaToken = (): string => {
+  // Get token from localStorage (set in VisualEditor component)
+  const storedToken = localStorage.getItem('figmaApiKey');
+  // If there's a token in localStorage, use it; otherwise get from config
+  return storedToken || figmaConfig.getFigmaToken();
+};
 
-// Create an axios instance with the Figma API base URL and authorization header
-const figmaApiClient = axios.create({
-  baseURL: 'https://api.figma.com/v1',
-  headers: {
-    'X-Figma-Token': FIGMA_TOKEN,
-  }
-});
+// Create a function to get a configured axios instance with the current token
+const getApiClient = () => {
+  return axios.create({
+    baseURL: 'https://api.figma.com/v1',
+    headers: {
+      'X-Figma-Token': getFigmaToken(),
+    }
+  });
+};
 
 /**
  * Check if the current Figma token is valid
@@ -19,7 +26,7 @@ const figmaApiClient = axios.create({
 export const validateToken = async () => {
   try {
     // Try to access user info, which is a simple call that should work with any token
-    const response = await figmaApiClient.get('/me');
+    const response = await getApiClient().get('/me');
     return { 
       valid: true, 
       user: response.data,
@@ -42,7 +49,7 @@ export const validateToken = async () => {
  */
 export const getLocalVariables = async (fileId: string) => {
   try {
-    const response = await figmaApiClient.get(`/files/${fileId}/variables/local`);
+    const response = await getApiClient().get(`/files/${fileId}/variables/local`);
     return response.data;
   } catch (error) {
     console.error('Error fetching variables from Figma:', error);
@@ -51,10 +58,15 @@ export const getLocalVariables = async (fileId: string) => {
 };
 
 // Define a type for the variables data
-interface FigmaVariablePayload {
+export interface FigmaVariablePayload {
   variableIds?: string[];
-  variables?: Record<string, unknown>;
+  variables?: Record<string, unknown> | Array<Record<string, unknown>>;
   variableCollections?: Record<string, unknown>;
+  variableModeValues?: Array<{
+    variableId: string;
+    modeId: string;
+    value: unknown;
+  }>;
 }
 
 /**
@@ -65,7 +77,7 @@ interface FigmaVariablePayload {
  */
 export const postVariables = async (fileId: string, variables: FigmaVariablePayload) => {
   try {
-    const response = await figmaApiClient.post(`/files/${fileId}/variables`, variables);
+    const response = await getApiClient().post(`/files/${fileId}/variables`, variables);
     return response.data;
   } catch (error) {
     console.error('Error posting variables to Figma:', error);
@@ -75,7 +87,7 @@ export const postVariables = async (fileId: string, variables: FigmaVariablePayl
 };
 
 export default {
-  FIGMA_TOKEN,
+  getFigmaToken,
   validateToken,
   getLocalVariables,
   postVariables

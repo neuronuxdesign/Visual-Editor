@@ -1,0 +1,230 @@
+.variable-dropdown {
+  position: relative;
+  width: 100%;
+  font-size: 12px;
+  
+  .dropdown-display {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #fff;
+    
+    &:hover {
+      border-color: #bdbdbd;
+    }
+    
+    .value-display {
+      display: flex;
+      align-items: center;
+      width: calc(100% - 20px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      
+      .value-with-preview, .value-with-reference {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        
+        span {
+          margin-right: 8px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          
+          &.float-value-display {
+            font-family: monospace;
+            background-color: #f5f8fb;
+            border: 1px solid #e0e6ed;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 12px;
+            color: #0066cc;
+            font-weight: 500;
+          }
+        }
+        
+        .color-preview {
+          flex-shrink: 0;
+        }
+      }
+      
+      .value-with-reference {
+        color: #1976d2;
+        flex-direction: column;
+        align-items: flex-start;
+        
+        .simplified-reference {
+          display: flex;
+          align-items: center;
+          width: 100%;
+        }
+        
+        .dropdown-reference-chain {
+          width: 100%;
+          margin-top: 4px;
+          
+          &.collapsed {
+            .reference-chain-preview {
+              .reference-final-value {
+                display: none;
+              }
+              
+              .reference-chain-text {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 10px;
+                color: #666;
+                padding: 2px 4px;
+                background-color: #f0f0f0;
+                border-radius: 2px;
+                margin-bottom: 0;
+              }
+            }
+            
+            &.in-display {
+              max-width: 100%;
+            }
+          }
+        }
+      }
+    }
+    
+    .dropdown-arrow {
+      font-size: 10px;
+      color: #757575;
+      padding-left: 4px;
+    }
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    margin-top: 2px;
+    
+    .dropdown-search, .dropdown-custom {
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+      
+      input {
+        width: 100%;
+        padding: 4px 8px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        font-size: 12px;
+        
+        &:focus {
+          outline: none;
+          border-color: #1976d2;
+        }
+      }
+    }
+    
+    .dropdown-custom {
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+      
+      input {
+        flex-grow: 1;
+      }
+    }
+    
+    .dropdown-options {
+      max-height: 200px;
+      overflow-y: auto;
+      
+      .dropdown-option {
+        display: flex;
+        flex-direction: column;
+        padding: 8px;
+        cursor: pointer;
+        
+        &:hover {
+          background-color: #f5f5f5;
+        }
+        
+        .option-label {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        
+        .option-reference-preview {
+          margin-top: 4px;
+          padding-left: 4px;
+          border-left: 2px solid #e0e0e0;
+          
+          .reference-chain-preview {
+            &.in-dropdown {
+              max-width: 100%;
+              font-size: 11px;
+              
+              .reference-chain-text {
+                padding: 4px 6px;
+                margin-bottom: 4px;
+              }
+              
+              .reference-final-value {
+                padding: 4px 6px;
+              }
+            }
+          }
+        }
+        
+        &.custom-option {
+          font-style: italic;
+          color: #555;
+        }
+      }
+    }
+  }
+  
+  // Styles for value-only view
+  .value-only {
+    padding: 4px 0;
+    
+    .value-with-reference {
+      display: flex;
+      align-items: center;
+      color: #1976d2;
+      
+      .color-preview {
+        margin-right: 8px;
+      }
+    }
+    
+    .value-display {
+      display: flex;
+      align-items: center;
+      
+      .color-preview {
+        margin-right: 8px;
+      }
+      
+      .text-value {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+} 

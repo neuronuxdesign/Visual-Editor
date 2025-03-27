@@ -1,5 +1,18 @@
-import { FigmaVariable, FigmaVariableCollection, isVariableReference, RGBAValue } from '../../types/figma';
-import { Variable } from '../../types/variables';
+import { 
+  FigmaVariable, 
+  FigmaVariableCollection, 
+  RGBAValue, 
+  Variable 
+} from '../../pages/VisualEditor/types';
+
+// Helper function to check if a value is a variable reference
+export const isVariableReference = (value: unknown): value is { type: string; id: string } => {
+  return value !== null && 
+         typeof value === 'object' && 
+         'type' in value && 
+         'id' in value && 
+         (value as {type: string}).type === 'VARIABLE_ALIAS';
+};
 
 /**
  * Format non-color variable values

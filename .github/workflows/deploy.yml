@@ -46,6 +46,13 @@ jobs:
         run: npm run build
         env:
           VITE_FIGMA_TOKEN: ${{ secrets.VITE_FIGMA_TOKEN }}
+          VITE_FIGMA_FILE_NAME: ${{ secrets.VITE_FIGMA_FILE_NAME }}
+          VITE_FIGMA_TOKEN_NEURON: ${{ secrets.VITE_FIGMA_TOKEN_NEURON }}
+          VITE_FIGMA_FILE_NAME_NEURON: ${{ secrets.VITE_FIGMA_FILE_NAME_NEURON }}
+          VITE_FIGMA_FILE_NAME_NEURON_THEME: ${{ secrets.VITE_FIGMA_FILE_NAME_NEURON_THEME }}
+          VITE_FIGMA_TOKEN_HMH: ${{ secrets.VITE_FIGMA_TOKEN_HMH }}
+          VITE_FIGMA_FILE_NAME_HMH: ${{ secrets.VITE_FIGMA_FILE_NAME_HMH }}
+          VITE_FIGMA_FILE_NAME_HMH_THEME: ${{ secrets.VITE_FIGMA_FILE_NAME_HMH_THEME }}
           BASE_URL: /Visual-Editor/
 
       - name: Setup Pages
