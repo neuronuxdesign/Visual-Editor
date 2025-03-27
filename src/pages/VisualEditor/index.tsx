@@ -595,16 +595,16 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     // Process all collection and mode information
     if (data.meta.variableCollections) {
       for (const [collectionId, collection] of Object.entries(data.meta.variableCollections)) {
-        // Skip collections that are hidden from publishing
-        if (collection.hiddenFromPublishing) {
+      // Skip collections that are hidden from publishing
+      if (collection.hiddenFromPublishing) {
           console.log(`Skipping hidden collection: ${collection.name}`);
           continue;
-        }
+      }
 
         // Create the collection node
         const collectionNode: TreeNode = {
           id: collectionId,
-          name: collection.name,
+        name: collection.name,
           type: 'folder',
           isExpanded: collectionId === Object.keys(collections)[0], // Expand first collection by default
           children: []
@@ -1000,8 +1000,8 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
               const newFolder: TreeNode = {
                 id: `${collectionId}-folder-${currentPath}`,
                 name: folderName,
-                type: 'folder',
-                isExpanded: false,
+          type: 'folder',
+          isExpanded: false,
                 children: []
               };
               
@@ -1569,7 +1569,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       if ((isCurrentTopLevel && isNewTopLevel && currentNode.id !== newNode.id) || 
           (currentNode.type !== newNode.type)) {
         console.log('Switching between different collections or node types, resetting modes');
-        setSelectedModes([]);
+    setSelectedModes([]);
       } else {
         console.log('Navigating within the same collection hierarchy, preserving modes');
         // When staying in the same collection hierarchy, preserve the selected modes
@@ -2186,7 +2186,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                     } }
                   />
                 </div>
-              </div>
+            </div>
               
               {/* Mode selector moved from VariablesList to here */}
               {availableModes.length > 0 && (
@@ -2232,7 +2232,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                   </div>
                 </div>
               )}
-            </div>
+          </div>
             
             <div className="action-buttons">
               <Button 

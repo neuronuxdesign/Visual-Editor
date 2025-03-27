@@ -11,9 +11,15 @@ interface ColorPreviewProps {
 
 // Helper function to get RGBA string from an RGBA value
 export const getRgbaString = (color: RGBAValue): string => {
-  const r = Math.round(color.r * 255);
-  const g = Math.round(color.g * 255);
-  const b = Math.round(color.b * 255);
+  // Check if the values are already in the 0-255 range
+  // If r, g, b are all >= 1, we can assume they're already in 0-255 range
+  // and don't need to be multiplied by 255
+  const isAlreadyInRgbRange = color.r > 1 || color.g > 1 || color.b > 1;
+  
+  // Use values directly if they're already in 0-255 range
+  const r = isAlreadyInRgbRange ? Math.round(color.r) : Math.round(color.r * 255);
+  const g = isAlreadyInRgbRange ? Math.round(color.g) : Math.round(color.g * 255);
+  const b = isAlreadyInRgbRange ? Math.round(color.b) : Math.round(color.b * 255);
   const a = color.a || 1;
 
   return `rgba(${r}, ${g}, ${b}, ${a || 1})`;
@@ -58,7 +64,10 @@ const ColorPreview: React.FC<ColorPreviewProps> = ({
 
       {showValue && (
         <span className="rgba-value">
-          rgba({Math.round(color.r * 255)}, {Math.round(color.g * 255)}, {Math.round(color.b * 255)}, {color.a || 1})
+          rgba({Math.round(color.r > 1 ? color.r : color.r * 255)}, 
+               {Math.round(color.g > 1 ? color.g : color.g * 255)}, 
+               {Math.round(color.b > 1 ? color.b : color.b * 255)}, 
+               {color.a || 1})
         </span>
       )}
     </div>

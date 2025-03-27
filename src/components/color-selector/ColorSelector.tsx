@@ -424,6 +424,8 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
                     key={`${instanceId}-color-overlay-${customAlpha}`}
                     style={{
                       backgroundColor: getRgbaString({
+                        // If the color value looks like it's already in 0-255 range (e.g., value > 1)
+                        // then use as is, otherwise interpret as 0-1 range and scale up
                         r: parseInt(customValue.split(',')[0] || '0'),
                         g: parseInt(customValue.split(',')[1] || '0'),
                         b: parseInt(customValue.split(',')[2] || '0'),
