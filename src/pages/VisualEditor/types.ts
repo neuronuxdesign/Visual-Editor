@@ -61,6 +61,7 @@ export interface Variable {
   rawValue: RGBAValue | string | number | boolean | null | Record<string, unknown>;
   modeId: string;
   collectionName: string;
+  modeName?: string; // Mode name - useful for displaying in UI and brand/theme extraction
   isColor: boolean;
   valueType: string;
   referencedVariable?: {
@@ -72,6 +73,7 @@ export interface Variable {
     fileId?: string;
   };
   description?: string;
+  source?: string; // Source of the variable (Main, Theme, All Colors)
 }
 
 export interface SelectOption {

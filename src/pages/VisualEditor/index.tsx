@@ -194,6 +194,12 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
   const [editingVariables, setEditingVariables] = useState<Record<string, boolean>>({});
   const [allVariables, setAllVariables] = useState<Variable[]>([]);
+  
+  // Dynamic selector options that can be updated from API data
+  const [availableBrandOptions, setAvailableBrandOptions] = useState<SelectOption[]>(brandOptions);
+  const [availableThemeOptions, setAvailableThemeOptions] = useState<SelectOption[]>(themeOptions);
+  
+  // Selected values for each selector
   const [selectedBrand, setSelectedBrand] = useState<SelectOption[]>([brandOptions[0]]);
   const [selectedThemes, setSelectedThemes] = useState<SelectOption[]>([themeOptions[0]]);
   const [selectedGrade, setSelectedGrade] = useState<SelectOption>(gradeOptions[0]);
@@ -286,6 +292,9 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     // Create an array to store all variables from different files
     let allCombinedVariables: Variable[] = [];
     
+    // Create a ref to store theme variables specifically for reference resolution
+    const themeVariablesRef: Record<string, Variable> = {};
+    
     // Track the number of completed requests
     let completedRequests = 0;
     const totalRequests = 1 + (themeFileId ? 1 : 0) + (allColorsFileId ? 1 : 0);
@@ -297,6 +306,9 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       
       if (completedRequests === totalRequests) {
         setLoadingMessage('Successfully synced all variables from Figma!');
+        
+        // Now that we have all variables, process the brand and theme options from the theme file
+        processThemeOptions();
         
         // Auto-clear success message after 3 seconds
         setTimeout(() => {
@@ -313,6 +325,106 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
             }
           }, 100);
         }, 3000);
+      }
+    };
+    
+    // Process the theme options based on theme file variables
+    const processThemeOptions = () => {
+      console.log('Processing theme file modes for selector options');
+      
+      // Find theme variables and collections with mode information
+      const themeFileVariables = allVariables.filter(v => v.source === 'Theme');
+      
+      if (themeFileVariables.length === 0 || !figmaData) {
+        console.log('No theme file variables or data found for processing options');
+        return;
+      }
+      
+      console.log('Processing theme collections for mode information');
+      
+      // Extract brand and theme options from non-hidden collections in the theme file
+      const brandSet = new Set<string>();
+      const themeSet = new Set<string>();
+      
+      // Always include Default
+      themeSet.add('Default');
+      brandSet.add('Default');
+      
+      // Get collections from figmaData that aren't hidden
+      if (figmaData.meta?.variableCollections) {
+        // Process each collection's modes
+        for (const [collectionId, collection] of Object.entries(figmaData.meta.variableCollections)) {
+          // Only process collections that aren't hidden from publishing
+          if (!collection.hiddenFromPublishing) {
+            console.log(`Processing modes from collection: ${collection.name}`);
+            
+            // Process each mode in the collection
+            if (collection.modes) {
+              for (const mode of collection.modes) {
+                const modeName = mode.name;
+                console.log(`Processing mode: ${modeName} (ID: ${mode.modeId})`);
+                
+                // Extract brand and theme from mode name
+                if (modeName.includes('(') && modeName.includes(')')) {
+                  // Extract the brand (text before the first parenthesis)
+                  const brandMatch = modeName.match(/^(.*?)\s*\(/);
+                  if (brandMatch && brandMatch[1]) {
+                    const brand = brandMatch[1].trim();
+                    brandSet.add(brand);
+                    console.log(`Extracted brand: ${brand}`);
+                  }
+                  
+                  // Extract the theme (text inside parentheses)
+                  const themeMatch = modeName.match(/\((.*?)\)/);
+                  if (themeMatch && themeMatch[1]) {
+                    const theme = themeMatch[1].trim();
+                    themeSet.add(theme);
+                    console.log(`Extracted theme: ${theme}`);
+                  }
+                } else if (modeName !== 'Default') {
+                  // If no parentheses but not 'Default', treat the whole name as a brand
+                  brandSet.add(modeName);
+                  console.log(`Extracted brand (no theme): ${modeName}`);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Convert sets to arrays for SelectOption format
+      const brandOptions = Array.from(brandSet).map(brand => ({
+        value: brand,
+        label: brand
+      }));
+      
+      const themeOptions = Array.from(themeSet).map(theme => ({
+        value: theme,
+        label: theme
+      }));
+      
+      console.log('Generated brand options:', brandOptions);
+      console.log('Generated theme options:', themeOptions);
+      
+      // Update the brand and theme options in state
+      if (brandOptions.length > 0) {
+        // Update the available options array
+        setAvailableBrandOptions(brandOptions);
+        
+        // Set the first brand as selected by default
+        setSelectedBrand([brandOptions[0]]);
+        
+        console.log('Updated brand options and selected brand:', brandOptions[0]);
+      }
+      
+      if (themeOptions.length > 0) {
+        // Update the available options array
+        setAvailableThemeOptions(themeOptions);
+        
+        // Set the first theme as selected by default
+        setSelectedThemes([themeOptions[0]]);
+        
+        console.log('Updated theme options and selected theme:', themeOptions[0]);
       }
     };
     
@@ -370,6 +482,14 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
           console.log('Theme Figma variables data:', data);
           // Process theme variables without clearing existing ones
           const themeVariables = processVariableData(data, false, 'Theme');
+          
+          // Store theme variables in our ref for reference resolution
+          themeVariables.forEach(variable => {
+            if (variable.id) {
+              themeVariablesRef[variable.id] = variable;
+            }
+          });
+          
           allCombinedVariables = [...allCombinedVariables, ...themeVariables];
           
           // Update the state with combined variables
@@ -390,7 +510,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
         console.log('Main Figma variables data:', data);
         setFigmaData(data);
         // Process without clearing if we had previous data
-        const mainVariables = processVariableData(data, !allColorsFileId, 'Main');
+        const mainVariables = processVariableData(data, !allColorsFileId, 'Main', themeVariablesRef);
         allCombinedVariables = [...allCombinedVariables, ...mainVariables];
         
         // Update the state with combined variables so far
@@ -450,7 +570,12 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
   };
 
   // Process variable data to extract variables
-  const processVariableData = (data: FigmaVariablesData, clearExisting = true, source = 'Main') => {
+  const processVariableData = (
+    data: FigmaVariablesData, 
+    clearExisting = true, 
+    source = 'Main',
+    themeVariablesRef: Record<string, Variable> = {}
+  ) => {
     // If no data, return an empty array
     if (!data || !data.meta) return [];
     
@@ -489,6 +614,40 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
         if (collection.modes) {
           for (const mode of collection.modes) {
             modeNames[mode.modeId] = { id: mode.modeId, name: mode.name };
+            
+            // If this is the Theme source, also parse mode names for brand/theme information
+            if (source === 'Theme') {
+              const modeName = mode.name;
+              
+              // We'll find the brand and theme from the mode name
+              let brand = 'Default';
+              let theme = 'Default';
+              
+              // Check if the mode name contains parentheses for theme extraction
+              if (modeName.includes('(') && modeName.includes(')')) {
+                // Extract the brand (text before the first parenthesis)
+                const brandMatch = modeName.match(/^(.*?)\s*\(/);
+                if (brandMatch && brandMatch[1]) {
+                  brand = brandMatch[1].trim();
+                }
+                
+                // Extract the theme (text inside parentheses)
+                const themeMatch = modeName.match(/\((.*?)\)/);
+                if (themeMatch && themeMatch[1]) {
+                  theme = themeMatch[1].trim();
+                }
+              } else if (modeName !== 'Default') {
+                // If no parentheses but not 'Default', use the whole name as brand
+                brand = modeName;
+              }
+              
+              // Create a mapping from mode ID to our brand-grade-device-theme format
+              // For now, we use fixed values for grade and device
+              const modeIdentifier = `${brand}-primary-desktop-${theme}`;
+              newModeMapping[mode.modeId] = modeIdentifier;
+              
+              console.log(`[THEME] Mapped mode '${modeName}' (ID: ${mode.modeId}) to: ${modeIdentifier}`);
+            }
           }
         }
 
@@ -581,6 +740,56 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                     finalValue: null,
                     finalValueType: refVariable.resolvedType
                   };
+                } else if (Object.keys(themeVariablesRef).length > 0) {
+                  // Reference not found locally - try to find it in theme variables
+                  // This handles the case where a reference ID is missing or invalid
+                  console.log(`Reference not found locally, searching in theme variables: ${refId}`);
+                  
+                  // Try exact match first
+                  const themeVariable = themeVariablesRef[refId];
+                  
+                  if (themeVariable) {
+                    console.log(`Found direct reference in theme variables: ${themeVariable.name}`);
+                    referencedVariable = {
+                      id: refId,
+                      name: themeVariable.name,
+                      collection: themeVariable.collectionName || 'Theme Collection',
+                      fileId: '', // Theme file references don't need file ID
+                      finalValue: themeVariable.rawValue,
+                      finalValueType: themeVariable.valueType
+                    };
+                  } else {
+                    // If no direct match, try to find a variable with a similar name
+                    // This is a fallback for when IDs don't match but names might
+                    console.log(`No direct match for ${refId}, searching by name`);
+                    
+                    // Extract the variable name from the current variable for comparison
+                    const varNameParts = figmaVar.name.split('/');
+                    const varNameToMatch = varNameParts[varNameParts.length - 1]; // Use last part of path
+                    
+                    // Find theme variables with a similar name
+                    const matchingThemeVars = Object.values(themeVariablesRef).filter(v => {
+                      const themeNameParts = v.name.split('/');
+                      const themeVarName = themeNameParts[themeNameParts.length - 1];
+                      return themeVarName === varNameToMatch;
+                    });
+                    
+                    if (matchingThemeVars.length > 0) {
+                      const matchedVar = matchingThemeVars[0]; // Use the first match
+                      console.log(`Found name-based match in theme variables: ${matchedVar.name}`);
+                      
+                      referencedVariable = {
+                        id: matchedVar.id || refId, // Use matched ID if available
+                        name: matchedVar.name,
+                        collection: matchedVar.collectionName || 'Theme Collection',
+                        fileId: '', // Theme file references don't need file ID
+                        finalValue: matchedVar.rawValue,
+                        finalValueType: matchedVar.valueType
+                      };
+                    } else {
+                      console.log(`No matching theme variable found for reference: ${refId}`);
+                    }
+                  }
                 }
               }
             } else if ('r' in value && 'g' in value && 'b' in value) {
@@ -666,6 +875,54 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                     finalValue: null,
                     finalValueType: refVariable.resolvedType
                   };
+                } else if (Object.keys(themeVariablesRef).length > 0) {
+                  // Reference not found locally - try to find it in theme variables
+                  console.log(`Reference not found locally, searching in theme variables: ${refId}`);
+                  
+                  // Try exact match first
+                  const themeVariable = themeVariablesRef[refId];
+                  
+                  if (themeVariable) {
+                    console.log(`Found direct reference in theme variables: ${themeVariable.name}`);
+                    referencedVariable = {
+                      id: refId,
+                      name: themeVariable.name,
+                      collection: themeVariable.collectionName || 'Theme Collection',
+                      fileId: '', // Theme file references don't need file ID
+                      finalValue: themeVariable.rawValue,
+                      finalValueType: themeVariable.valueType
+                    };
+                  } else {
+                    // If no direct match, try to find a variable with a similar name
+                    console.log(`No direct match for ${refId}, searching by name`);
+                    
+                    // Extract the variable name from the current variable for comparison
+                    const varNameParts = figmaVar.name.split('/');
+                    const varNameToMatch = varNameParts[varNameParts.length - 1]; // Use last part of path
+                    
+                    // Find theme variables with a similar name
+                    const matchingThemeVars = Object.values(themeVariablesRef).filter(v => {
+                      const themeNameParts = v.name.split('/');
+                      const themeVarName = themeNameParts[themeNameParts.length - 1];
+                      return themeVarName === varNameToMatch;
+                    });
+                    
+                    if (matchingThemeVars.length > 0) {
+                      const matchedVar = matchingThemeVars[0]; // Use the first match
+                      console.log(`Found name-based match in theme variables: ${matchedVar.name}`);
+                      
+                      referencedVariable = {
+                        id: matchedVar.id || refId, // Use matched ID if available
+                        name: matchedVar.name,
+                        collection: matchedVar.collectionName || 'Theme Collection',
+                        fileId: '', // Theme file references don't need file ID
+                        finalValue: matchedVar.rawValue,
+                        finalValueType: matchedVar.valueType
+                      };
+                    } else {
+                      console.log(`No matching theme variable found for reference: ${refId}`);
+                    }
+                  }
                 }
               }
             } else if ('r' in value && 'g' in value && 'b' in value) {
@@ -786,6 +1043,15 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     
     // Log total variables created
     console.log(`Created ${createdVariables.length} variables from ${source}`);
+    console.log(`Mode mappings created: ${Object.keys(newModeMapping).length}`);
+    
+    // Log mode mappings for debugging
+    if (source === 'Theme') {
+      console.log('Theme mode mappings:');
+      Object.entries(newModeMapping).forEach(([modeId, identifier]) => {
+        console.log(`  ${modeId} -> ${identifier} (${modeNames[modeId]?.name || 'Unknown'})`);
+      });
+    }
     
     // Set the processed variables and tree data
     if (clearExisting) {
@@ -1875,7 +2141,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                 className="react-select-container"
                 classNamePrefix="react-select"
                     value={ selectedBrand }
-                    options={ brandOptions }
+                    options={ availableBrandOptions }
                     isMulti
                     components={ {
                     DropdownIndicator: () => (
@@ -1888,7 +2154,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                         setSelectedBrand(options as SelectOption[]);
                       } else {
                         // If all options are removed, keep the first one selected
-                        setSelectedBrand([brandOptions[0]]);
+                        setSelectedBrand([availableBrandOptions[0]]);
                       }
                     } }
                   />
@@ -1902,7 +2168,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                     className="react-select-container"
                     classNamePrefix="react-select"
                     value={ selectedThemes }
-                    options={ themeOptions }
+                    options={ availableThemeOptions }
                     isMulti
                     components={ {
                       DropdownIndicator: () => (
@@ -1915,7 +2181,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                         setSelectedThemes(options as SelectOption[]);
                       } else {
                         // If all options are removed, keep the first one selected
-                        setSelectedThemes([themeOptions[0]]);
+                        setSelectedThemes([availableThemeOptions[0]]);
                       }
                     } }
                   />
