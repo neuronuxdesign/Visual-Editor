@@ -1,6 +1,9 @@
 /* VariablesList styles */
 .folder-contents {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   
   h2 {
     margin-top: 0;
@@ -36,238 +39,315 @@
     }
   }
   
-  .variables-table {
+  /* Table wrapper contains both header and scrollable content */
+  .variables-table-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
     border: 1px solid #e0e0e0;
     border-radius: 4px;
-
-    .variables-row {
-      display: flex;
-      border-bottom: 1px solid #e0e0e0;
+    max-height: calc(100vh - 530px); /* Prevent growing too large */
+    
+    /* Scrollable table with fixed header */
+    .variables-table {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: auto; /* Enable horizontal scrolling */
+      width: 100%;
       
-      &:last-child {
-        border-bottom: none;
-      }
-      
-      &.variables-header {
+      /* Fixed header that sticks to the top of scrollable area */
+      .variables-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
         background-color: #f5f5f5;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         font-weight: 600;
-        
+
+        min-height: 50px;
         .variable-cell {
           padding: 12px 16px;
+          
+          &.variable-info-cell {
+            position: sticky;
+            left: 0;
+            z-index: 11; /* Higher than header z-index to appear above */
+            background-color: #f5f5f5;
+          }
+          
+          &.variable-actions-cell {
+            position: sticky;
+            right: 0;
+            z-index: 11; /* Higher than header z-index to appear above */
+            background-color: #f5f5f5;
+          }
+          
+          .mode-indicator {
+            font-size: 12px;
+            color: #0066cc;
+            margin-left: 4px;
+          }
+        }
+      }
+      
+      .variables-row {
+        display: grid;
+        grid-template-columns: 300px repeat(auto-fill, minmax(320px, 1fr)) 100px;
+        min-width: 100%; /* Ensure grid takes up at least full width */
+        align-items: center;
+        border-bottom: 1px solid #e0e0e0;
+        
+        &:last-child {
+          border-bottom: none;
+        }
+        
+        /* Add zebra striping for better readability */
+        &:nth-child(even):not(.variables-header) {
+          background-color: #f9f9f9;
+        }
+        
+        .variable-cell {
+          &.variable-info-cell {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background-color: inherit; /* Inherit from parent to maintain zebra striping */
+          }
+          
+          &.variable-actions-cell {
+            position: sticky;
+            right: 0;
+            z-index: 1;
+            background-color: inherit; /* Inherit from parent to maintain zebra striping */
+          }
+        }
+      }
+    }
+  }
+  
+  .variable-cell {
+    padding: 8px 16px;
+    
+    &.variable-info-cell {
+      .variable-info-content {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        
+        .color-preview {
+          display: none; /* Hide color preview */
+        }
+        
+        .variable-name {
+          font-weight: 500;
+          width: 100%;
+        }
+        
+        .variable-name-input {
+          flex: 1;
+          margin-right: 10px;
+          font-weight: 500;
+          padding: 6px;
+          border: 1px solid #ccc;
+          border-radius: 4px;
         }
       }
     }
     
-    .variable-cell {
-      padding: 8px 16px;
+    &.variable-mode-value-cell {
+      display: grid;
+      gap: 16px;
+      padding: 8px;
+      border-left: 1px solid #eee;
+      min-width: 220px;
+      min-height: 50px;
       
-      &.variable-info-cell {
-        flex: 0 0 250px;
-        min-width: 250px;
-        width: 250px;
-        
-        .variable-info-content {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          
-          .color-preview {
-            display: none; /* Hide color preview */
-          }
-          
-          .variable-name {
-            font-weight: 500;
-            width: 100%;
-          }
-        }
+      &.active-mode {
+        background-color: rgba(0, 0, 0, 0.02);
       }
       
-      &.variable-mode-value-cell {
-        flex: 1;
-        min-width: 150px;
-        
-        &.active-mode {
-          background-color: rgba(0, 0, 0, 0.02);
+      /* Force hide all variable value spans that are siblings or children of variable-alias-display */
+      .variable-alias-display ~ span,
+      .variable-alias-display + span,
+      .variable-alias-display span[key*="value-"] {
+        display: none !important;
+      }
+      
+      /* Target the value span when VARIABLE_ALIAS is present */
+      div:has(.variable-alias-display) > span[key*="value-"] {
+        display: none !important;
+      }
+      
+      /* Hide the raw "Reference to" text that appears as the variable value */
+      .variable-alias-display {
+        /* Hide any direct text inside this container that doesn't have a class */
+        > span:not([class]) {
+          display: none;
         }
         
-        /* Force hide all variable value spans that are siblings or children of variable-alias-display */
-        .variable-alias-display ~ span,
-        .variable-alias-display + span,
-        .variable-alias-display span[key*="value-"] {
-          display: none !important;
+        /* Add new styles for the color preview */
+        display: flex;
+        align-items: center;
+        
+        .reference-chain-color-preview {
+          margin-right: 8px;
+          flex-shrink: 0;
         }
         
-        /* Target the value span when VARIABLE_ALIAS is present */
-        div:has(.variable-alias-display) > span[key*="value-"] {
-          display: none !important;
-        }
-        
-        /* Hide the raw "Reference to" text that appears as the variable value */
-        .variable-alias-display {
-          /* Hide any direct text inside this container that doesn't have a class */
-          > span:not([class]) {
+        /* Style for LinkedVariableDetails component inside table cells */
+        .linked-variable-details {
+          flex: 1;
+          padding: 0;
+          background-color: transparent;
+          border-radius: 0;
+          margin-bottom: 0;
+          
+          h2 {
+            display: none; /* Hide the title in table cells */
+          }
+          
+          .variable-properties {
+            gap: 4px;
+            
+            .property-row {
+              margin-bottom: 4px;
+              
+              &:first-child, &:nth-child(2), &:nth-child(3) {
+                display: none; /* Hide type, collection, and description rows */
+              }
+              
+              .property-label {
+                width: auto;
+                font-size: 12px;
+                margin-right: 4px;
+              }
+              
+              .reference-chain-container {
+                .reference-chain-summary {
+                  cursor: pointer;
+                  font-size: 11px;
+                  
+                  .reference-chain-text {
+                    font-family: monospace;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    max-width: 150px;
+                    display: inline-block;
+                    vertical-align: bottom;
+                  }
+                }
+              }
+            }
+          }
+          
+          /* Show references properly */
+          .property-row:nth-child(4) {
+            display: flex;
+            
+            .reference-display {
+              display: flex;
+              align-items: center;
+              
+              .color-preview {
+                display: inline-block !important;
+                width: 16px !important;
+                height: 16px !important;
+              }
+              
+              .reference-var-button {
+                font-size: 12px;
+                padding: 2px 8px;
+                border-radius: 3px;
+                background-color: #f0f8ff;
+                border: 1px solid #d0e0ff;
+                cursor: pointer;
+              }
+            }
+          }
+          
+          /* Ensure the reference chain and final value are visible */
+          .property-row:nth-child(5) {
+            display: flex;
+            
+            .reference-chain-section {
+              width: 100%;
+              
+              .reference-chain-preview {
+                width: 100%;
+                
+                .reference-chain-text {
+                  font-size: 11px;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  max-width: 95%;
+                }
+                
+                .reference-final-value {
+                  display: flex !important;
+                  margin-top: 4px;
+                  background-color: #f5f5f5;
+                  border-radius: 3px;
+                  padding: 3px 6px;
+                  border: 1px solid #eee;
+                  
+                  .color-value-display {
+                    display: flex !important;
+                  }
+                  
+                  .text-value-small {
+                    font-size: 12px;
+                    display: inline-block !important;
+                  }
+                }
+              }
+            }
+          }
+          
+          /* Hide resolved value in table cells */
+          .property-row:nth-child(6) {
             display: none;
           }
           
-          /* Add new styles for the color preview */
-          display: flex;
-          align-items: center;
-          
-          .reference-chain-color-preview {
-            margin-right: 8px;
-            flex-shrink: 0;
-          }
-          
-          /* Style for LinkedVariableDetails component inside table cells */
-          .linked-variable-details {
-            flex: 1;
-            padding: 0;
-            background-color: transparent;
-            border-radius: 0;
-            margin-bottom: 0;
-            
-            h2 {
-              display: none; /* Hide the title in table cells */
-            }
-            
-            .variable-properties {
-              gap: 4px;
-              
-              .property-row {
-                margin-bottom: 4px;
-                
-                &:first-child, &:nth-child(2), &:nth-child(3) {
-                  display: none; /* Hide type, collection, and description rows */
-                }
-                
-                .property-label {
-                  width: auto;
-                  font-size: 12px;
-                  margin-right: 4px;
-                }
-                
-                .reference-chain-container {
-                  .reference-chain-summary {
-                    cursor: pointer;
-                    font-size: 11px;
-                    
-                    .reference-chain-text {
-                      font-family: monospace;
-                      overflow: hidden;
-                      text-overflow: ellipsis;
-                      white-space: nowrap;
-                      max-width: 150px;
-                      display: inline-block;
-                      vertical-align: bottom;
-                    }
-                  }
-                }
-              }
-            }
-            
-            /* Show references properly */
-            .property-row:nth-child(4) {
-              display: flex;
-              
-              .reference-display {
-                display: flex;
-                align-items: center;
-                
-                .color-preview {
-                  display: inline-block !important;
-                  width: 16px !important;
-                  height: 16px !important;
-                }
-                
-                .reference-var-button {
-                  font-size: 12px;
-                  padding: 2px 8px;
-                  border-radius: 3px;
-                  background-color: #f0f8ff;
-                  border: 1px solid #d0e0ff;
-                  cursor: pointer;
-                }
-              }
-            }
-            
-            /* Ensure the reference chain and final value are visible */
-            .property-row:nth-child(5) {
-              display: flex;
-              
-              .reference-chain-section {
-                width: 100%;
-                
-                .reference-chain-preview {
-                  width: 100%;
-                  
-                  .reference-chain-text {
-                    font-size: 11px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    max-width: 95%;
-                  }
-                  
-                  .reference-final-value {
-                    display: flex !important;
-                    margin-top: 4px;
-                    background-color: #f5f5f5;
-                    border-radius: 3px;
-                    padding: 3px 6px;
-                    border: 1px solid #eee;
-                    
-                    .color-value-display {
-                      display: flex !important;
-                    }
-                    
-                    .text-value-small {
-                      font-size: 12px;
-                      display: inline-block !important;
-                    }
-                  }
-                }
-              }
-            }
-            
-            /* Hide resolved value in table cells */
-            .property-row:nth-child(6) {
-              display: none;
-            }
-            
-            /* Ensure save button is visible */
-            .property-row:last-child {
-              margin-top: 8px;
-              
-              .save-variable-btn {
-                padding: 3px 8px;
-                font-size: 12px;
-              }
-            }
-          }
-        }
-        
-        .no-value {
-          color: #999;
-          font-style: italic;
-        }
-        
-        .variable-edit-container {
-          margin-top: 8px;
-          
-          .mode-buttons {
-            display: flex;
-            gap: 8px;
+          /* Ensure save button is visible */
+          .property-row:last-child {
             margin-top: 8px;
+            
+            .save-variable-btn {
+              padding: 3px 8px;
+              font-size: 12px;
+            }
           }
         }
       }
       
-      &.variable-actions-cell {
-        flex: 0 0 100px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+      .no-value {
+        color: #999;
+        font-style: italic;
+        font-size: 0.85em;
       }
+      
+      /* Variable edit container */
+      .variable-edit-container {
+        margin-top: 8px;
+        
+        .mode-buttons {
+          display: flex;
+          gap: 8px;
+          margin-top: 8px;
+          justify-content: flex-end;
+        }
+      }
+    }
+    
+    &.variable-actions-cell {
+      /* Remove flex properties as we now use grid */
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
   }
 }
@@ -289,4 +369,10 @@
     color: #0066cc;
     font-weight: 500;
   }
+}
+
+/* New variable row styles */
+.new-variable-row {
+  background-color: rgba(52, 152, 219, 0.05);
+  border-top: 1px solid #e0e0ff;
 } 

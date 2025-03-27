@@ -208,15 +208,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showColorPicker, setShowColorPicker] = useState<boolean>(false);
-  const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
-  const [tempColor, setTempColor] = useState<{ r: number, g: number, b: number, a: number }>({
-    r: 0,
-    g: 0,
-    b: 0,
-    a: 1
-  });
-  const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number, left: number }>({ top: 0, left: 0 });
   const [figmaApiKey, setFigmaApiKey] = useState<string>('');
   // Add a new state for tracking mode-specific values
   // Add these new state variables after the other state declarations (around line 570)
@@ -736,25 +727,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     // This is crucial because the filtered variables array might not contain the variable we're editing
     const isInAllVariables = index === -1 && variable.id && 
       allVariables.some(v => v.id === variable.id && v.modeId === variable.modeId);
-    
-    console.log(`[DEBUG] handleVariableValueChange for ${variable.name}:`, {
-      value: newValue,
-      valueType: typeof newValue,
-      isRGBAObject: typeof newValue === 'object' && newValue !== null && 'r' in newValue && 'g' in newValue && 'b' in newValue && 'a' in newValue,
-      foundInVariables: index !== -1,
-      foundInAllVariables: isInAllVariables,
-      variablesLength: variables.length,
-      allVariablesLength: allVariables.length,
-      // Add current alpha value if it's a color
-      currentAlpha: variable.isColor && variable.rawValue && 
-                   typeof variable.rawValue === 'object' && 
-                   'a' in variable.rawValue ? 
-                   (variable.rawValue as RGBAValue).a : 'none',
-      // Show if rawValue is passed directly
-      hasRawValue: variable.rawValue ? 'yes' : 'no',
-      rawValueType: variable.rawValue ? typeof variable.rawValue : 'none',
-      entireVariable: JSON.stringify(variable)
-    });
     
     if (index === -1 && !isInAllVariables) {
       console.error('[ERROR] Variable not found in either variables or allVariables arrays:', variable);
@@ -1344,14 +1316,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                                  !(rgba.r === 0 && rgba.g === 0 && rgba.b === 0) && // Not likely exactly (0,0,0)
                                  !(rgba.r === 1 && rgba.g === 1 && rgba.b === 1);   // Not likely exactly (1,1,1)
       
-      console.log('[DEBUG] Color value analysis:', {
-        r: rgba.r, 
-        g: rgba.g, 
-        b: rgba.b,
-        isNormalized: isAlreadyNormalized,
-        isLikelyRGB255: rgba.r > 1 || rgba.g > 1 || rgba.b > 1
-      });
-      
       // Always normalize to 0-1 range for Figma API
       const result = {
         r: isAlreadyNormalized ? rgba.r : rgba.r / 255,
@@ -1360,7 +1324,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
         a: rgba.a || 1
       };
       
-      console.log('[DEBUG] Normalized RGBA object:', result, 'Was already normalized:', isAlreadyNormalized);
       return result;
     }
 
@@ -1390,24 +1353,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       // This ensures we have the most up-to-date data regardless of React's state batching
       const refKey = `${variable.id}-${variable.modeId}`;
       const latestVariableFromRef = latestVariableValues.current[refKey];
-
-      console.log(`[DEBUG] Saving variable ${refKey}:`, {
-        originalVariable: {
-          id: variable.id,
-          name: variable.name,
-          value: variable.value,
-          rawValue: variable.rawValue,
-          isColor: variable.isColor,
-        },
-        fromRef: latestVariableFromRef ? {
-          id: latestVariableFromRef.id,
-          name: latestVariableFromRef.name,
-          value: latestVariableFromRef.value,
-          rawValue: latestVariableFromRef.rawValue,
-          isColor: latestVariableFromRef.isColor,
-        } : 'No ref value found',
-        time: new Date().toISOString()
-      });
 
       // Choose the latest source of truth in this priority:
       // 1. Our ref (latestVariableFromRef) - most reliable and immediate
@@ -1628,30 +1573,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
   };
 
 
-  // Function to handle opening the color picker
-  const handleColorPickerOpen = (variableIndex: number, variables: Variable[]) => {
-    if (variableIndex === -1 || !variables[variableIndex]) return;
-
-    const variable = variables[variableIndex];
-    if (!variable.isColor) return;
-
-    // Get the raw color value
-    const rgba = variable.rawValue as RGBAValue;
-
-    // Set the active color for the picker
-    setActiveColorIndex(variableIndex);
-    setTempColor({
-      r: rgba.r,
-      g: rgba.g,
-      b: rgba.b,
-      a: rgba.a || 1
-    });
-
-    // Show the color picker (position will be set by the component)
-    setColorPickerPosition({ top: 100, left: 100 });
-    setShowColorPicker(true);
-  };
-
 
   // Helper function to get modes for the current collection
   const getCurrentCollectionModes = () => {
@@ -1829,8 +1750,53 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                     } }
                   />
                 </div>
+              </div>
+              
+              {/* Mode selector moved from VariablesList to here */}
+              {availableModes.length > 0 && (
+                <div className="selected-mode-section">
+                  <label>Modes From Mapped File</label>
+                  <div className="mode-dropdown-container">
+                    <Select
+                      isMulti
+                      className="react-select-container"
+                      classNamePrefix="react-select"
+                      placeholder="Select modes to display"
+                      value={selectedModes.map(mode => ({
+                        value: mode.modeId,
+                        label: mode.name
+                      }))}
+                      options={availableModes.map(mode => ({
+                        value: mode.modeId,
+                        label: mode.name
+                      }))}
+                      components={ {
+                        DropdownIndicator: () => (
+                          <div className="custom-dropdown-arrow">▼</div>
+                        )
+                      } }
+                      onChange={(options) => {
+                        // Handle empty selection - always keep at least one mode
+                        if (!options || options.length === 0) {
+                          if (availableModes.length > 0) {
+                            setSelectedModes([availableModes[0]]);
+                          }
+                          return;
+                        }
+
+                        // Update selected modes
+                        const newSelectedModes = options.map(option => {
+                          const mode = availableModes.find(m => m.modeId === option.value);
+                          return mode || { modeId: option.value, name: option.label };
+                        });
+
+                        setSelectedModes(newSelectedModes);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
             
             <div className="action-buttons">
               <Button 

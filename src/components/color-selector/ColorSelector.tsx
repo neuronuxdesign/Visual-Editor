@@ -104,10 +104,16 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
 
   // Update custom value when variable value changes
   useEffect(() => {
-    setCustomValue(variable.value);
-    setCustomAlpha((variable.rawValue as RGBAValue)?.a || 1);
+    // Don't set custom value if this is a reference variable (VARIABLE_ALIAS)
+    if (!variable.referencedVariable) {
+      setCustomValue(variable.value);
+      setCustomAlpha((variable.rawValue as RGBAValue)?.a || 1);
+    } else {
+      // Clear the custom value for reference variables
+      setCustomValue('');
+    }
     setLastAppliedValue(variable.value);
-  }, [variable, variable.value]);
+  }, [variable, variable.value, variable.referencedVariable]);
   
   // Generate options from all color variables
   const getOptions = (): VariableOption[] => {
@@ -387,26 +393,27 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
               </div>
               
               <div className="dropdown-custom">
-                <input 
-                  type="text" 
-                  placeholder="RGB color value (e.g. 255, 0, 0)"
+                <input
+                  type="text"
                   value={customValue}
                   onChange={(e) => setCustomValue(e.target.value)}
+                  placeholder="Enter custom color value..."
                 />
-                <Button 
-                  variant="primary"
-                  onClick={handleApplyCustomValue}
-                >
-                  Apply
-                </Button>
-                <Button 
-                  variant="outlined"
-                  danger
-                  onClick={handleCancel}
-                  className="cancel-button"
-                >
-                  Cancel
-                </Button>
+                <div className="button-container">
+                  <Button 
+                    variant="primary"
+                    onClick={handleApplyCustomValue}
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    danger
+                    onClick={handleCancel}
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
               
               <div className="dropdown-color-preview">

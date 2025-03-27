@@ -229,7 +229,6 @@ const LinkedVariableDetails: React.FC<LinkedVariableDetailsProps> = ({
         {/* Reference chain display - Always visible, no toggle */}
         <div className="property-row" style={
           { flexDirection: "column" }}>
-          <div className="property-label">Reference Chain:</div>
           <div className="property-value">
             <div className="reference-chain-section">
               <ReferenceChainPreview

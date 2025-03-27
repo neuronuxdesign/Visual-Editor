@@ -177,10 +177,7 @@ const VariablesList: React.FC<VariablesListProps> = ({
   return (
     <div className="folder-contents">
       <h2>{selectedNode.name}</h2>
-      <p className="folder-description">
-        {folderVariables.length} variable{folderVariables.length !== 1 ? 's' : ''} found
-      </p>
-
+      
       <div className="variables-table-header">
         {/* Move button here but keep NewVariableCreator component for the table */}
         <Button 
@@ -189,333 +186,269 @@ const VariablesList: React.FC<VariablesListProps> = ({
         >
           Create Variable
         </Button>
-
-        {/* Mode selector */}
-        {availableModes.length > 0 && (
-          <div className="mode-selector">
-            <label>Modes:</label>
-            <div className="mode-multiselect">
-              <Select
-                isMulti
-                className="react-select-container"
-                classNamePrefix="react-select"
-                placeholder="Select modes to display"
-                value={selectedModes.map(mode => ({
-                  value: mode.modeId,
-                  label: mode.name
-                }))}
-                options={availableModes.map(mode => ({
-                  value: mode.modeId,
-                  label: mode.name
-                }))}
-                onChange={(options) => {
-                  // Handle empty selection - always keep at least one mode
-                  if (!options || options.length === 0) {
-                    if (availableModes.length > 0) {
-                      setSelectedModes([availableModes[0]]);
-                    }
-                    return;
-                  }
-
-                  // Update selected modes
-                  const newSelectedModes = options.map(option => {
-                    const mode = availableModes.find(m => m.modeId === option.value);
-                    return mode || { modeId: option.value, name: option.label };
-                  });
-
-                  setSelectedModes(newSelectedModes);
-                }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
-      <div className="variables-table multi-mode-table">
-        <div className="variables-row variables-header">
-          <div className="variable-cell variable-info-cell">Variable</div>
-          {/* Render columns for each selected mode */}
-          {selectedModes.map(mode => {
-            // Determine if this is the default mode
-            const isDefaultMode = availableModes.length > 0 ? mode.modeId === availableModes[0].modeId : false;
+      <div className="variables-table-wrapper">
+        {/* Scrollable content area with table header and rows */}
+        <div className="variables-table multi-mode-table">
+          {/* Fixed header within scrollable area (will be sticky) */}
+          <div className="variables-row variables-header">
+            <div className="variable-cell variable-info-cell">Variable</div>
+            {/* Render columns for each selected mode */}
+            {selectedModes.map(mode => {
+              // Determine if this is the default mode
+              const isDefaultMode = availableModes.length > 0 ? mode.modeId === availableModes[0].modeId : false;
+
+              return (
+                <div
+                  key={`${mode.modeId}-${uniqueId}`}
+                  className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
+                >
+                  <span>
+                    {mode.name} {isDefaultMode && <sup className="mode-indicator">★</sup>}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="variable-cell variable-actions-cell">Actions</div>
+          </div>
+          
+          {/* Existing variables - grouped by unique variable ID */}
+          {uniqueVariables.map((variable) => {
+            // Generate a hash of all mode values for this variable to force re-render when any value changes
+            const modeValuesHash = selectedModes.map(mode => {
+              const modeVar = allVariables.find(v => v.id === variable.id && v.modeId === mode.modeId);
+              return modeVar ? `${modeVar.value}` : 'undefined';
+            }).join('|');
 
             return (
               <div
-                key={`${mode.modeId}-${uniqueId}`}
-                className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
+                key={`${variable.id}-row-${modeValuesHash}-${uniqueId}`}
+                className="variables-row"
               >
-                <span>
-                  {mode.name} {isDefaultMode && <sup className="mode-indicator">★</sup>}
-                </span>
-              </div>
-            );
-          })}
-          <div className="variable-cell variable-actions-cell">Actions</div>
-        </div>
-
-        {/* Existing variables - grouped by unique variable ID */}
-        {uniqueVariables.map((variable) => {
-          // Generate a hash of all mode values for this variable to force re-render when any value changes
-          const modeValuesHash = selectedModes.map(mode => {
-            const modeVar = allVariables.find(v => v.id === variable.id && v.modeId === mode.modeId);
-            return modeVar ? `${modeVar.value}` : 'undefined';
-          }).join('|');
-
-          return (
-            <div
-              key={`${variable.id}-row-${modeValuesHash}-${uniqueId}`}
-              className="variables-row"
-            >
-              {/* Variable info cell - same for all modes */}
-              <div className="variable-cell variable-info-cell">
-                <div className="variable-info-content">
-                  <div className="variable-name">{variable.name || ''}</div>
+                {/* Variable info cell - same for all modes */}
+                <div className="variable-cell variable-info-cell">
+                  <div className="variable-info-content">
+                    <div className="variable-name">{variable.name || ''}</div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Create a cell for each selected mode */}
-              {selectedModes.map(mode => {
-                const isDefaultMode = availableModes.length > 0 ? mode.modeId === availableModes[0].modeId : false;
+                {/* Create a cell for each selected mode */}
+                {selectedModes.map(mode => {
+                  const isDefaultMode = availableModes.length > 0 ? mode.modeId === availableModes[0].modeId : false;
 
-                // Find the variable value for this mode
-                const modeVariable = allVariables.find(v =>
-                  v.id === variable.id &&
-                  v.modeId === mode.modeId
-                );
+                  // Find the variable value for this mode
+                  const modeVariable = allVariables.find(v =>
+                    v.id === variable.id &&
+                    v.modeId === mode.modeId
+                  );
 
-                return (
-                  <div
-                    key={`${variable.id}-${mode.modeId}-${uniqueId}`}
-                    className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
-                  >
-                    {modeVariable ? (
-                      <>
-                        {/* Special handling for VARIABLE_ALIAS type */}
-                        {(modeVariable.valueType === 'VARIABLE_ALIAS' || 
-                          (modeVariable.rawValue && typeof modeVariable.rawValue === 'object' && 'type' in modeVariable.rawValue && modeVariable.rawValue.type === 'VARIABLE_ALIAS')) 
-                          && modeVariable.referencedVariable ? (
-                          <div className="variable-alias-display">
-                            {/* Add a compact color preview for reference variables if they eventually point to a color */}
-                            {(() => {
-                              // Use the same resolveVariableReferences and extractColorFromVariable functions
-                              // that are used in LinkedVariableDetails
-                              if (modeVariable.referencedVariable?.id) {
-                                const { finalVariable } = resolveVariableReferences(
-                                  modeVariable.referencedVariable.id,
-                                  'current',
-                                  allVariables
-                                );
-                                
-                                // If the final variable is a color, extract and show the preview
-                                if (finalVariable?.isColor) {
-                                  const colorValue = extractColorFromVariable(finalVariable);
-                                  if (colorValue) {
+                  return (
+                    <div
+                      key={`${variable.id}-${mode.modeId}-${uniqueId}`}
+                      className={`variable-cell variable-mode-value-cell ${isDefaultMode ? 'active-mode' : ''}`}
+                    >
+                      {modeVariable ? (
+                        <>
+                          {/* Special handling for VARIABLE_ALIAS type */}
+                          {(modeVariable.valueType === 'VARIABLE_ALIAS' || 
+                            (modeVariable.rawValue && typeof modeVariable.rawValue === 'object' && 'type' in modeVariable.rawValue && modeVariable.rawValue.type === 'VARIABLE_ALIAS')) 
+                            && modeVariable.referencedVariable ? (
+                            <div className="variable-alias-display">
+                              <LinkedVariableDetails
+                                variableData={modeVariable}
+                                allVariables={allVariables}
+                                editingVariables={editingVariables}
+                                handleSaveVariable={handleSaveVariable}
+                                handleVariableValueChange={handleVariableValueChange}
+                                onNavigateToReference={handleSelectNode}
+                                setEditingVariables={setEditingVariables}
+                              />
+                            </div>
+                          ) : (
+                            // Regular variable display code
+                            <>
+                              {/* Show color preview for color values */}
+                              {modeVariable.isColor && modeVariable.rawValue && (() => {
+                                try {
+                                  const colorValue = modeVariable.rawValue as RGBAValue;
+                                  if (colorValue && 'r' in colorValue && 'g' in colorValue && 'b' in colorValue) {
                                     return (
                                       <ColorPreview
                                         color={colorValue}
                                         size="small"
-                                        className="reference-chain-color-preview"
-                                        key={`ref-color-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}
+                                        showValue={modeVariable.valueType !== 'VARIABLE_ALIAS'}
+                                        className="variable-list-preview"
+                                        key={`color-preview-${modeVariable.id}-${modeVariable.modeId}-${colorValue.r}-${colorValue.g}-${colorValue.b}-${uniqueId}`}
                                       />
                                     );
                                   }
+                                  return null;
+                                } catch (error) {
+                                  console.error("Error rendering color preview:", error);
+                                  return null;
                                 }
-                              }
-                              return null;
-                            })()}
-                            <LinkedVariableDetails
-                              variableData={modeVariable}
-                              allVariables={allVariables}
-                              editingVariables={editingVariables}
-                              handleSaveVariable={handleSaveVariable}
-                              handleVariableValueChange={handleVariableValueChange}
-                              onNavigateToReference={handleSelectNode}
-                              setEditingVariables={setEditingVariables}
-                            />
-                          </div>
-                        ) : (
-                          // Regular variable display code
-                          <>
-                            {/* Show color preview for color values */}
-                            {modeVariable.isColor && modeVariable.rawValue && (() => {
-                              try {
-                                const colorValue = modeVariable.rawValue as RGBAValue;
-                                if (colorValue && 'r' in colorValue && 'g' in colorValue && 'b' in colorValue) {
-                                  return (
-                                    <ColorPreview
-                                      color={colorValue}
-                                      size="small"
-                                      showValue={modeVariable.valueType !== 'VARIABLE_ALIAS'}
-                                      className="variable-list-preview"
-                                      key={`color-preview-${modeVariable.id}-${modeVariable.modeId}-${colorValue.r}-${colorValue.g}-${colorValue.b}-${uniqueId}`}
+                              })()}
+                              
+                              {/* Show float preview for FLOAT type variables */}
+                              {modeVariable.valueType === 'FLOAT' && modeVariable.rawValue && (() => {
+                                try {
+                                  const floatValue = typeof modeVariable.rawValue === 'number' 
+                                    ? modeVariable.rawValue 
+                                    : parseFloat(String(modeVariable.rawValue));
+                                  
+                                  if (!isNaN(floatValue)) {
+                                    return (
+                                      <div className="float-preview" key={`float-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}>
+                                        <span className="float-value">{floatValue.toFixed(2)}</span>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                } catch (error) {
+                                  console.error("Error rendering float preview:", error);
+                                  return null;
+                                }
+                              })()}
+
+                              {/* Show edit button when not in edit mode */}
+                              {modeVariable.id && !editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
+                                <Button
+                                  variant="primary"
+                                  onClick={() => {
+                                    setEditingVariables(prev => ({
+                                      ...prev,
+                                      [`${modeVariable.id}-${modeVariable.modeId}`]: true
+                                    }));
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+
+                              {/* Show variable dropdown and save/cancel buttons when in edit mode */}
+                              {modeVariable.id && editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
+                                <div className="variable-edit-container">
+                                  {modeVariable.isColor ? (
+                                    <ColorSelector
+                                      variable={modeVariable}
+                                      allVariables={allVariables}
+                                      onValueChange={handleVariableValueChange}
+                                      valueOnly={false}
+                                      key={`folder-list-ref-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
                                     />
-                                  );
-                                }
-                                return null;
-                              } catch (error) {
-                                console.error("Error rendering color preview:", error);
-                                return null;
-                              }
-                            })()}
-                            
-                            {/* Show float preview for FLOAT type variables */}
-                            {modeVariable.valueType === 'FLOAT' && modeVariable.rawValue && (() => {
-                              try {
-                                const floatValue = typeof modeVariable.rawValue === 'number' 
-                                  ? modeVariable.rawValue 
-                                  : parseFloat(String(modeVariable.rawValue));
-                                
-                                if (!isNaN(floatValue)) {
-                                  return (
-                                    <div className="float-preview" key={`float-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}>
-                                      <span className="float-value">{floatValue.toFixed(2)}</span>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              } catch (error) {
-                                console.error("Error rendering float preview:", error);
-                                return null;
-                              }
-                            })()}
+                                  ) : (
+                                    <VariableDropdown
+                                      variable={modeVariable}
+                                      allVariables={allVariables}
+                                      onValueChange={handleVariableValueChange}
+                                      valueOnly={false}
+                                      onSave={handleSaveVariable}
+                                      key={`folder-list-dropdown-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
+                                    />
+                                  )}
+                                  <div className="mode-buttons">
+                                    <Button
+                                      variant="primary"
+                                      onClick={() => {
+                                        // Get the most current version of this variable from allVariables
+                                        if (modeVariable.id) {
+                                          const currentVariable = allVariables.find(
+                                            v => v.id === modeVariable.id && v.modeId === modeVariable.modeId
+                                          );
 
-                            {/* Show edit button when not in edit mode */}
-                            {modeVariable.id && !editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
-                              <Button
-                                variant="primary"
-                                onClick={() => {
-                                  setEditingVariables(prev => ({
-                                    ...prev,
-                                    [`${modeVariable.id}-${modeVariable.modeId}`]: true
-                                  }));
-                                }}
-                              >
-                                Edit
-                              </Button>
-                            )}
+                                          if (currentVariable) {
+                                            // Use the latest version from state
+                                            console.log('[DEBUG] Save button - using latest variable state:', {
+                                              id: currentVariable.id,
+                                              name: currentVariable.name,
+                                              originalValue: modeVariable.value,
+                                              latestValue: currentVariable.value
+                                            });
 
-                            {/* Show variable dropdown and save/cancel buttons when in edit mode */}
-                            {modeVariable.id && editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (
-                              <div className="variable-edit-container">
-                                {modeVariable.isColor ? (
-                                  <ColorSelector
-                                    variable={modeVariable}
-                                    allVariables={allVariables}
-                                    onValueChange={handleVariableValueChange}
-                                    valueOnly={false}
-                                    key={`folder-list-ref-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
-                                  />
-                                ) : (
-                                  <VariableDropdown
-                                    variable={modeVariable}
-                                    allVariables={allVariables}
-                                    onValueChange={handleVariableValueChange}
-                                    valueOnly={false}
-                                    onSave={handleSaveVariable}
-                                    key={`folder-list-dropdown-${modeVariable.id}-${modeVariable.modeId}-${JSON.stringify(modeVariable.value).substring(0, 10)}-${uniqueId}`}
-                                  />
-                                )}
-                                <div className="mode-buttons">
-                                  <Button
-                                    variant="primary"
-                                    onClick={() => {
-                                      // Get the most current version of this variable from allVariables
-                                      if (modeVariable.id) {
-                                        const currentVariable = allVariables.find(
-                                          v => v.id === modeVariable.id && v.modeId === modeVariable.modeId
-                                        );
-
-                                        if (currentVariable) {
-                                          // Use the latest version from state
-                                          console.log('[DEBUG] Save button - using latest variable state:', {
-                                            id: currentVariable.id,
-                                            name: currentVariable.name,
-                                            originalValue: modeVariable.value,
-                                            latestValue: currentVariable.value
-                                          });
-
-                                          handleSaveVariable(currentVariable);
+                                            handleSaveVariable(currentVariable);
+                                          } else {
+                                            // Fallback to the variable from render props if not found
+                                            console.log('[DEBUG] Save button - using original variable (not found in state)');
+                                            handleSaveVariable(modeVariable);
+                                          }
                                         } else {
-                                          // Fallback to the variable from render props if not found
-                                          console.log('[DEBUG] Save button - using original variable (not found in state)');
+                                          // No ID, just use what we have
                                           handleSaveVariable(modeVariable);
                                         }
-                                      } else {
-                                        // No ID, just use what we have
-                                        handleSaveVariable(modeVariable);
-                                      }
-                                    }}
-                                    disabled={!isEditAllowed}
-                                    title={editDisabledMessage}
-                                  >
-                                    Save
-                                  </Button>
-                                  <Button
-                                    variant="outlined"
-                                    danger
-                                    onClick={() => handleCancelVariableChanges(modeVariable)}
-                                  >
-                                    Cancel
-                                  </Button>
+                                      }}
+                                      disabled={!isEditAllowed}
+                                      title={editDisabledMessage}
+                                    >
+                                      Save
+                                    </Button>
+                                    <Button
+                                      variant="outlined"
+                                      danger
+                                      onClick={() => handleCancelVariableChanges(modeVariable)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      <span className="no-value">No value for this mode</span>
-                    )}
-                  </div>
-                );
-              })}
+                              )}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span className="no-value">No value for this mode</span>
+                      )}
+                    </div>
+                  );
+                })}
 
-              {/* Actions cell - add delete button */}
-              <div className="variable-cell variable-actions-cell">
-                <RemoveVariable
-                  variable={variable}
-                  figmaData={figmaData}
-                  editingVariables={editingVariables}
-                  setEditingVariables={setEditingVariables}
-                  setIsLoading={setIsLoading}
-                  setLoadingMessage={setLoadingMessage}
-                  setErrorMessage={setErrorMessage}
-                  onVariablesUpdated={processVariableData}
-                />
+                {/* Actions cell - add delete button */}
+                <div className="variable-cell variable-actions-cell">
+                  <RemoveVariable
+                    variable={variable}
+                    figmaData={figmaData}
+                    editingVariables={editingVariables}
+                    setEditingVariables={setEditingVariables}
+                    setIsLoading={setIsLoading}
+                    setLoadingMessage={setLoadingMessage}
+                    setErrorMessage={setErrorMessage}
+                    onVariablesUpdated={processVariableData}
+                  />
+                </div>
               </div>
+            );
+          })}
+          
+          {/* New variable row at the end of the table */}
+          {isCreatingVariable && (
+            <div ref={newVariableRowRef}>
+              <NewVariableCreator
+                selectedNodeId={selectedNodeId}
+                treeData={treeData}
+                allVariables={allVariables}
+                selectedBrand={selectedBrand}
+                selectedGrade={selectedGrade}
+                selectedDevice={selectedDevice}
+                selectedThemes={selectedThemes}
+                modeMapping={modeMapping}
+                selectedModes={selectedModes}
+                availableModes={availableModes}
+                figmaData={figmaData}
+                formatColorForFigma={formatColorForFigma}
+                onVariablesUpdated={(data) => {
+                  processVariableData(data);
+                  setIsCreatingVariable(false);
+                }}
+                setIsLoading={setIsLoading}
+                setLoadingMessage={setLoadingMessage}
+                setErrorMessage={setErrorMessage}
+                onCancel={() => setIsCreatingVariable(false)}
+                showRow={true}
+                hideButton={true}
+              />
             </div>
-          );
-        })}
-        
-        {/* New variable row at the end of the table */}
-        {isCreatingVariable && (
-          <div ref={newVariableRowRef}>
-            <NewVariableCreator
-              selectedNodeId={selectedNodeId}
-              treeData={treeData}
-              allVariables={allVariables}
-              selectedBrand={selectedBrand}
-              selectedGrade={selectedGrade}
-              selectedDevice={selectedDevice}
-              selectedThemes={selectedThemes}
-              modeMapping={modeMapping}
-              selectedModes={selectedModes}
-              availableModes={availableModes}
-              figmaData={figmaData}
-              formatColorForFigma={formatColorForFigma}
-              onVariablesUpdated={(data) => {
-                processVariableData(data);
-                setIsCreatingVariable(false);
-              }}
-              setIsLoading={setIsLoading}
-              setLoadingMessage={setLoadingMessage}
-              setErrorMessage={setErrorMessage}
-              onCancel={() => setIsCreatingVariable(false)}
-              showRow={true}
-              hideButton={true}
-            />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
