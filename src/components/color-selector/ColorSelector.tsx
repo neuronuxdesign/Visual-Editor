@@ -348,7 +348,6 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
               className="value-with-reference" 
               title={`Referenced variable: ${variable.referencedVariable.name} from ${variable.referencedVariable.collection}`}
             >
-              {/* @ts-ignore - Known type issue to bypass for build */}
               {variable.referencedVariable.finalValue && (
                 <ColorPreview
                   color={variable.referencedVariable.finalValue as RGBAValue}

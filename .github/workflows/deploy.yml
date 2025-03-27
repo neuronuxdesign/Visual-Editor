@@ -37,10 +37,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+
+      # Fix for "Cannot find module @rollup/rollup-linux-x64-gnu" error
+      - name: Clean npm cache
+        run: |
+          rm -rf node_modules
+          rm -f package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-optional
 
       - name: Build project
         run: npm run build
