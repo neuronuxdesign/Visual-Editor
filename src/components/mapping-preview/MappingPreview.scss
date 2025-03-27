@@ -62,4 +62,16 @@
   gap: 10px;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.mapping-preview-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.selected-modes-info {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
 } 
