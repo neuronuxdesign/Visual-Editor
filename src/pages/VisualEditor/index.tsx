@@ -2195,7 +2195,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                   <div className="mode-dropdown-container">
                     <Select
                       isMulti
-                      className="react-select-container"
+                      className="react-select-container modes-select-container"
                       classNamePrefix="react-select"
                       placeholder="Select modes to display"
                       value={selectedModes.map(mode => ({

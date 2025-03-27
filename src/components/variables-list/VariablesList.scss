@@ -41,87 +41,119 @@
   
   /* Table wrapper contains both header and scrollable content */
   .variables-table-wrapper {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
+    position: relative;
     border: 1px solid #e0e0e0;
     border-radius: 4px;
     max-height: calc(100vh - 530px); /* Prevent growing too large */
+  }
+  
+  .variables-table {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
     
-    /* Scrollable table with fixed header */
-    .variables-table {
+    .variables-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: var(--color-background);
+      border-bottom: 1px solid var(--color-border);
+      height: 40px;
+      min-height: 40px;
+      font-weight: 600;
+      display: flex;
+    }
+
+    .variables-rows-container {
       flex: 1;
       overflow-y: auto;
-      overflow-x: auto; /* Enable horizontal scrolling */
-      width: 100%;
-      
-      /* Fixed header that sticks to the top of scrollable area */
-      .variables-header {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background-color: #f5f5f5;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        font-weight: 600;
+      overflow-x: auto; /* Use auto instead of scroll for better appearance */
+      position: relative;
+    }
 
-        min-height: 50px;
-        .variable-cell {
-          padding: 12px 16px;
+    .variables-row {
+      display: flex;
+      width: max-content; /* Ensure it expands to content width */
+      min-width: 100%;
+      position: relative;
+      align-items: stretch;
+      border-bottom: 1px solid #e0e0e0;
+      min-height: 50px;
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      &:hover {
+        background-color: #f9f9f9;
+      }
+    }
+
+    .header-scrollable-area,
+    .row-scrollable-area {
+      display: flex;
+      /* Allow the scrollable area to grow naturally based on content */
+    }
+
+    .variable-cell {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--color-border);
+      min-height: 60px;
+      
+      &.variable-info-cell {
+        width: 300px;
+        min-width: 300px;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background-color: var(--color-background);
+        
+        .variable-info-content {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
           
-          &.variable-info-cell {
-            position: sticky;
-            left: 0;
-            z-index: 11; /* Higher than header z-index to appear above */
-            background-color: #f5f5f5;
-          }
-          
-          &.variable-actions-cell {
-            position: sticky;
-            right: 0;
-            z-index: 11; /* Higher than header z-index to appear above */
-            background-color: #f5f5f5;
-          }
-          
-          .mode-indicator {
-            font-size: 12px;
-            color: #0066cc;
-            margin-left: 4px;
+          .variable-name {
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
         }
       }
       
-      .variables-row {
-        display: grid;
-        grid-template-columns: 300px repeat(auto-fill, minmax(320px, 1fr)) 100px;
-        min-width: 100%; /* Ensure grid takes up at least full width */
-        align-items: center;
-        border-bottom: 1px solid #e0e0e0;
+      &.variable-mode-value-cell {
+        flex: 0 0 300px;
+        min-width: 300px;
+        width: 300px;
+        word-break: break-word;
         
-        &:last-child {
-          border-bottom: none;
+        &.active-mode {
+          background-color: rgba(0, 0, 0, 0.03);
         }
         
-        /* Add zebra striping for better readability */
-        &:nth-child(even):not(.variables-header) {
-          background-color: #f9f9f9;
+        .mode-indicator {
+          color: var(--color-accent);
+          margin-left: 4px;
         }
-        
-        .variable-cell {
-          &.variable-info-cell {
-            position: sticky;
-            left: 0;
-            z-index: 1;
-            background-color: inherit; /* Inherit from parent to maintain zebra striping */
-          }
-          
-          &.variable-actions-cell {
-            position: sticky;
-            right: 0;
-            z-index: 1;
-            background-color: inherit; /* Inherit from parent to maintain zebra striping */
-          }
-        }
+      }
+      
+      &.variable-actions-cell {
+        width: 120px;
+        min-width: 120px;
+        position: sticky;
+        right: 0;
+        z-index: 2;
+        background-color: var(--color-background);
+        justify-content: center;
       }
     }
   }
@@ -159,8 +191,7 @@
       display: grid;
       gap: 16px;
       padding: 8px;
-      border-left: 1px solid #eee;
-      min-width: 220px;
+      min-width: 300px;
       min-height: 50px;
       
       &.active-mode {
@@ -329,25 +360,29 @@
         font-size: 0.85em;
       }
       
-      /* Variable edit container */
+      /* Button layout in variable cells */
       .variable-edit-container {
-        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
         
+        /* Style mode buttons container */
         .mode-buttons {
           display: flex;
           gap: 8px;
           margin-top: 8px;
-          justify-content: flex-end;
+          
+          /* Ensure buttons don't overflow */
+          button {
+            flex: 1;
+            white-space: nowrap;
+            min-width: auto;
+            font-size: 12px; /* Smaller font size for action buttons */
+            padding: 6px 12px; /* Smaller padding for action buttons */
+          }
         }
       }
-    }
-    
-    &.variable-actions-cell {
-      /* Remove flex properties as we now use grid */
-      text-align: center;
-      display: flex;
-      justify-content: center;
-      align-items: center;
     }
   }
 }
