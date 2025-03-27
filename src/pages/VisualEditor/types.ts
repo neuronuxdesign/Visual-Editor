@@ -3,9 +3,10 @@
 export interface TreeNode {
   id: string;
   name: string;
-  type: 'file' | 'folder';
-  children?: TreeNode[];
+  type: 'folder' | 'file';
   isExpanded?: boolean;
+  children?: TreeNode[];
+  path?: string[]; // Optional path property for hierarchical structure
 }
 
 export interface RGBAValue {

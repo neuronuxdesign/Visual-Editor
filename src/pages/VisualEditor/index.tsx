@@ -470,18 +470,18 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     // Process all collection and mode information
     if (data.meta.variableCollections) {
       for (const [collectionId, collection] of Object.entries(data.meta.variableCollections)) {
-      // Skip collections that are hidden from publishing
-      if (collection.hiddenFromPublishing) {
+        // Skip collections that are hidden from publishing
+        if (collection.hiddenFromPublishing) {
           console.log(`Skipping hidden collection: ${collection.name}`);
           continue;
-      }
+        }
 
-        // Create a folder node for this collection
-        collections[collectionId] = {
+        // Create the collection node
+        const collectionNode: TreeNode = {
           id: collectionId,
-        name: collection.name,
+          name: collection.name,
           type: 'folder',
-          isExpanded: false,
+          isExpanded: collectionId === Object.keys(collections)[0], // Expand first collection by default
           children: []
         };
         
@@ -491,12 +491,18 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
             modeNames[mode.modeId] = { id: mode.modeId, name: mode.name };
           }
         }
+
+        // Store the collection for later use
+        collections[collectionId] = collectionNode;
       }
     }
     
     // Then, process all variables
     const createdVariables: Variable[] = [];
     if (data.meta.variables) {
+      // First pass: create all variables and organize them by collection
+      const variablesByCollection: Record<string, Record<string, { variable: Variable, node: TreeNode }>> = {};
+      
       for (const [varId, figmaVar] of Object.entries(data.meta.variables)) {
         // We need to create a variable for each mode, but only for modes that have values
         // for this specific variable
@@ -511,24 +517,115 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
           continue;
         }
         
-        // Find the collection node from our map
-        const collectionNode = collections[collectionId];
-        if (!collectionNode) continue; // Skip if collection node not found
-        
-        // Create a file node for this variable 
-        const variableNode: TreeNode = {
-          id: varId,
-          name: figmaVar.name,
-          type: 'file'
-        };
-        
-        // Add to the collection's children
-        if (!collectionNode.children) {
-          collectionNode.children = [];
+        // Initialize the collection if it doesn't exist
+        if (!variablesByCollection[collectionId]) {
+          variablesByCollection[collectionId] = {};
         }
-        collectionNode.children.push(variableNode);
+        
+        // Parse the variable name to extract the actual display name (last part after '/')
+        const nameParts = figmaVar.name.split('/');
+        const displayName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : figmaVar.name;
+        
+        // Create a tree node for this variable - only once per variable ID
+        if (!variablesByCollection[collectionId][varId]) {
+          // Create a tree node for this variable
+          const variableNode: TreeNode = {
+            id: varId,
+            name: displayName, // Use the extracted name (last part after slash)
+            type: 'file',
+            // Store the full path for hierarchy creation
+            path: nameParts.length > 1 ? nameParts.slice(0, -1) : []
+          };
+          
+          // Get the first mode to use as the representative variable
+          const firstModeId = Object.keys(figmaVar.valuesByMode)[0];
+          if (!firstModeId) continue; // Skip if no modes
+          
+          const value = figmaVar.valuesByMode[firstModeId];
+          
+          // Process the variable for the first mode to get a representative variable
+          // Check if the value is a reference to another variable
+          let isReference = false;
+          let referencedVariable = undefined;
+          let rawValue = value;
+          let displayValue = '';
+          let isColor = false;
+          
+          // Handle different value types
+          if (typeof value === 'object' && value !== null) {
+            if ('type' in value && value.type === 'VARIABLE_ALIAS') {
+              isReference = true;
+              
+              // Extract reference ID
+              let refId = '';
+              if ('id' in value && value.id) {
+                refId = String(value.id);
+                
+                // Handle Figma's format where the ID could be "fileKey/variableId"
+                if (refId.includes('/')) {
+                  refId = refId.split('/')[1];
+                }
+                
+                // Try to find the referenced variable in the data
+                const refVariable = data.meta.variables?.[refId];
+                
+                if (refVariable) {
+                  const refCollectionId = refVariable.variableCollectionId;
+                  const refCollection = data.meta.variableCollections?.[refCollectionId];
+                  
+                  referencedVariable = {
+                    id: refId,
+                    name: refVariable.name,
+                    collection: refCollection?.name || 'Unknown Collection',
+                    fileId: '', // Empty for local references
+                    finalValue: null,
+                    finalValueType: refVariable.resolvedType
+                  };
+                }
+              }
+            } else if ('r' in value && 'g' in value && 'b' in value) {
+              // It's a color value
+              isColor = true;
+              const rgbaValue = value as RGBAValue;
+              
+              // Scale to 0-255 range for display
+              const r = Math.round(rgbaValue.r * 255);
+              const g = Math.round(rgbaValue.g * 255);
+              const b = Math.round(rgbaValue.b * 255);
+              
+              displayValue = `${r}, ${g}, ${b}`;
+              rawValue = {
+                r: rgbaValue.r,
+                g: rgbaValue.g,
+                b: rgbaValue.b,
+                a: 'a' in rgbaValue ? rgbaValue.a : 1 
+              };
+            }
+          }
+          
+          // Create a representative variable for this variable ID
+          const representativeVariable: Variable = {
+            id: varId,
+            name: figmaVar.name,
+            collectionName: collection.name,
+            modeId: firstModeId,
+            modeName: modeNames[firstModeId]?.name || 'Default',
+            value: displayValue || String(value),
+            rawValue: rawValue,
+            isColor: figmaVar.resolvedType === 'COLOR' || isColor,
+            valueType: isReference ? 'VARIABLE_ALIAS' : figmaVar.resolvedType,
+            referencedVariable: referencedVariable,
+            source: source // Add the source of the variable
+          };
+          
+          // Store this variable/node combination for later processing
+          variablesByCollection[collectionId][varId] = { 
+            variable: representativeVariable, 
+            node: variableNode 
+          };
+        }
       
-        // Process each mode
+        // Process each mode to create actual variables (these will be used for editing/display)
         for (const modeId in figmaVar.valuesByMode) {
           const value = figmaVar.valuesByMode[modeId];
           
@@ -591,11 +688,10 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
             }
           }
           
-          // Create a variable for this mode
+          // Create a variable for this mode (will be used for editing/data management)
           const variable: Variable = {
             id: varId,
             name: figmaVar.name,
-            collectionId: collectionId,
             collectionName: collection.name,
             modeId: modeId,
             modeName: modeNames[modeId]?.name || 'Default',
@@ -607,111 +703,126 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
             source: source // Add the source of the variable
           };
           
+          // Add to the created variables array and all variables array
           createdVariables.push(variable);
           newAllVariables.push(variable);
         }
       }
+      
+      // Second pass: build hierarchical folder structure
+      for (const [collectionId, varsAndNodes] of Object.entries(variablesByCollection)) {
+        const collectionNode = collections[collectionId];
+        if (!collectionNode) continue;
+        
+        // Build a folder hierarchy for this collection
+        const rootFolders: Record<string, TreeNode> = {};
+        
+        // Process each variable to place it in the proper folder - only one entry per variable ID
+        Object.values(varsAndNodes).forEach(({ node }) => {
+          const path = node.path as string[] || [];
+          
+          if (path.length === 0) {
+            // If no path (no slashes in name), add directly to collection
+            if (!collectionNode.children) collectionNode.children = [];
+            collectionNode.children.push(node);
+            return;
+          }
+          
+          // Build the folder hierarchy
+          const currentLevel = rootFolders;
+          let currentPath = '';
+          let parentFolder: TreeNode | null = null;
+          
+          for (let i = 0; i < path.length; i++) {
+            const folderName = path[i];
+            currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+            
+            // Look for existing folder at this level
+            if (!currentLevel[folderName]) {
+              // Create folder if it doesn't exist
+              const newFolder: TreeNode = {
+                id: `${collectionId}-folder-${currentPath}`,
+                name: folderName,
+                type: 'folder',
+                isExpanded: false,
+                children: []
+              };
+              
+              currentLevel[folderName] = newFolder;
+              
+              // Add to parent if we have one, otherwise it's a root folder
+              if (parentFolder) {
+                if (!parentFolder.children) parentFolder.children = [];
+                parentFolder.children.push(newFolder);
+              }
+            }
+            
+            parentFolder = currentLevel[folderName];
+            
+            // Set up next level
+            if (i === path.length - 1) {
+              // Last folder in path, add the variable to it
+              if (!parentFolder.children) parentFolder.children = [];
+              parentFolder.children.push(node);
+            }
+          }
+        });
+        
+        // Add root folders to collection
+        Object.values(rootFolders).forEach(folder => {
+          if (!collectionNode.children) collectionNode.children = [];
+          collectionNode.children.push(folder);
+        });
+      }
     }
 
-    // Build the tree from collections and variables
+    // Build the tree from collections
     const newTreeData: TreeNode[] = [];
     
-    // First create nodes for each collection
-    Object.entries(collections).forEach(([collectionId, collection]) => {
-      // Skip if this collection ID corresponds to a hidden collection
-      if (data.meta.variableCollections?.[collectionId]?.hiddenFromPublishing) {
-        return;
-      }
-      
-      // Create the collection node
-      const collectionNode: TreeNode = {
-        id: collectionId,
-        name: collection.name,
-        type: 'folder',
-        isExpanded: collectionId === Object.keys(collections)[0], // Expand first collection by default
-        children: []
-      };
-      
-      // Add variables directly to the collection node instead of grouping by type
-      if (collection.children && collection.children.length > 0) {
-        // Add all variables directly to collection node without type grouping
-        collectionNode.children = [...collection.children];
-      }
-      
-      // Add the collection node to the tree
+    // Add each collection to the tree
+    Object.values(collections).forEach(collectionNode => {
       newTreeData.push(collectionNode);
     });
     
-    console.log(`Total variables loaded: ${createdVariables.length}`);
-    console.log(`Mode mappings created for ${Object.keys(newModeMapping).length} modes`);
+    // Log total variables created
+    console.log(`Created ${createdVariables.length} variables from ${source}`);
     
-    // Update tree data if this is the main load
+    // Set the processed variables and tree data
     if (clearExisting) {
-    setTreeData(newTreeData);
-
-      // Automatically select the first collection if available
-    if (newTreeData.length > 0) {
-        console.log('Auto-selecting first collection after initial load:', newTreeData[0].name);
-        setTimeout(() => setSelectedNodeId(newTreeData[0].id), 50);
-      }
+      setAllVariables(newAllVariables);
+      setVariables(newAllVariables);
+      setTreeData(newTreeData);
+      setModeMapping(newModeMapping);
     } else {
-      // Merge with existing tree data
-      const mergedTreeData = [...treeData];
+      setAllVariables(newAllVariables);
+      setVariables(newAllVariables);
       
-      // Add new collections
-      newTreeData.forEach(newCollection => {
-        // Check if collection already exists
-        const existingCollectionIndex = mergedTreeData.findIndex(c => c.id === newCollection.id);
-        
-        if (existingCollectionIndex === -1) {
-          // Add new collection
-          mergedTreeData.push(newCollection);
-        } else {
-          // Merge with existing collection
-          const existingCollection = mergedTreeData[existingCollectionIndex];
-          
-          // Check each type group
-          newCollection.children?.forEach(newTypeGroup => {
-            // Find matching type group in existing collection
-            const existingTypeGroupIndex = existingCollection.children?.findIndex(g => g.name === newTypeGroup.name) ?? -1;
-            
-            if (existingTypeGroupIndex === -1 || !existingCollection.children) {
-              // Add new type group
-              existingCollection.children = existingCollection.children || [];
-              existingCollection.children.push(newTypeGroup);
-            } else {
-              // Merge variables in the type group
-              const existingTypeGroup = existingCollection.children[existingTypeGroupIndex];
-              
-              newTypeGroup.children?.forEach(newVariable => {
-                // Check if variable already exists
-                const existingVariableIndex = existingTypeGroup.children?.findIndex(v => v.id === newVariable.id) ?? -1;
-                
-                if (existingVariableIndex === -1 || !existingTypeGroup.children) {
-                  // Add new variable
-                  existingTypeGroup.children = existingTypeGroup.children || [];
-                  existingTypeGroup.children.push(newVariable);
-                }
-              });
+      // Merge tree data
+      const combinedTreeData = [...treeData];
+      
+      // Check if collection already exists and merge if needed
+      newTreeData.forEach(newNode => {
+        const existingNodeIndex = combinedTreeData.findIndex(node => node.name === newNode.name);
+        if (existingNodeIndex !== -1) {
+          // Merge children from the new node into the existing node
+          if (newNode.children && newNode.children.length > 0) {
+            if (!combinedTreeData[existingNodeIndex].children) {
+              combinedTreeData[existingNodeIndex].children = [];
             }
-          });
+            combinedTreeData[existingNodeIndex].children = [
+              ...combinedTreeData[existingNodeIndex].children || [],
+              ...newNode.children
+            ];
+          }
+        } else {
+          // Add as a new node
+          combinedTreeData.push(newNode);
         }
       });
       
-      setTreeData(mergedTreeData);
-      
-      // If no node is currently selected, select the first collection
-      if (!selectedNodeId && mergedTreeData.length > 0) {
-        console.log('Auto-selecting first collection after merge:', mergedTreeData[0].name);
-        setTimeout(() => setSelectedNodeId(mergedTreeData[0].id), 50);
-      }
+      setTreeData(combinedTreeData);
+      setModeMapping({ ...modeMapping, ...newModeMapping });
     }
-    
-    // Always update all variables
-    setAllVariables(newAllVariables);
-    
-    // Store mode mappings
-    setModeMapping(newModeMapping);
     
     return createdVariables;
   };
@@ -1663,6 +1774,65 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       delete updated[`${ variable.id }-${ variable.modeId }`];
       return updated;
     });
+  };
+
+  // Helper function to create hierarchical folder structure from variable names
+  const createHierarchicalStructure = (variables: TreeNode[]): TreeNode[] => {
+    const rootFolders: TreeNode[] = [];
+    
+    // Process each variable to create a hierarchical structure
+    variables.forEach((variableNode: TreeNode) => {
+      const nameParts = variableNode.name.split('/');
+      
+      // No slashes in name, add directly to root
+      if (nameParts.length === 1) {
+        rootFolders.push(variableNode);
+        return;
+      }
+      
+      // Last part is the actual variable name
+      const actualName = nameParts.pop() || '';
+      
+      // Find or create each folder in the path
+      let currentLevel = rootFolders;
+      let currentPath = '';
+      
+      // Process each folder in the path
+      nameParts.forEach((folderName: string) => {
+        currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+        
+        // Look for existing folder at this level
+        let folderNode = currentLevel.find(node => 
+          node.type === 'folder' && node.name === folderName
+        );
+        
+        // Create folder if it doesn't exist
+        if (!folderNode) {
+          folderNode = {
+            id: `${collectionId}-folder-${currentPath}`,
+            name: folderName,
+            type: 'folder',
+            isExpanded: false,
+            children: []
+          };
+          currentLevel.push(folderNode);
+        }
+        
+        // Move to next level (this folder's children)
+        currentLevel = folderNode.children as TreeNode[];
+      });
+      
+      // Create a new node for the variable with updated name
+      const leafNode: TreeNode = {
+        ...variableNode,
+        name: actualName // Use the last part after the final slash
+      };
+      
+      // Add to the current level
+      currentLevel.push(leafNode);
+    });
+    
+    return rootFolders;
   };
 
   return (
