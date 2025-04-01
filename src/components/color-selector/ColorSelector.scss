@@ -1,6 +1,7 @@
 .color-selector {
   position: relative;
   width: 100%;
+  max-width: 500px;
   
   .dropdown-display {
     display: flex;
@@ -94,13 +95,17 @@
   .dropdown-menu {
     position: absolute;
     left: 0;
-    width: 100%;
-    max-width: 300px;
+    width: 500px;
+    max-width: calc(100vw - 40px);
     background-color: #fff;
     border: 1px solid #ddd;
     border-radius: 4px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     z-index: 1000;
+    max-height: 40vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     
     // Default bottom position
     &.position-bottom {
@@ -133,19 +138,22 @@
     }
     
     .dropdown-custom {
-      flex-direction: column;
-      align-items: end;
-      padding: 10px;
-      border-bottom: 1px solid #ddd;
       display: flex;
-      gap: 8px;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      gap: 12px;
       
       input {
         flex: 1;
-        padding: 6px 8px;
+        padding: 8px 10px;
         border: 1px solid #ddd;
         border-radius: 4px;
-        font-size: 13px;
+        font-size: 14px;
+        width: 50%;
+        min-width: initial;
         
         &:focus {
           outline: none;
@@ -156,6 +164,8 @@
       .button-container{
         display: flex;
         gap: 8px;
+        width: 50%;
+        justify-content: flex-end;
       }
     }
     
@@ -241,12 +251,32 @@
     }
     
     .dropdown-options {
-      max-height: 200px;
+      max-height: calc(40vh - 200px);
       overflow-y: auto;
+      flex: 1;
+      scrollbar-width: thin;
+      
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+      
+      &::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
       
       .dropdown-option {
         display: flex;
-        padding: 8px 10px;
+        padding: 8px 12px;
         cursor: pointer;
         
         &:hover {
@@ -254,22 +284,33 @@
         }
         
         .option-content {
-          width: 100%;
           display: flex;
-          flex-direction: column;
+          width: 100%;
+          justify-content: space-between;
+          align-items: center;
           
           .option-label {
             display: flex;
             align-items: center;
-            white-space: nowrap;
+            gap: 8px;
             overflow: hidden;
             text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 50%;
+            width: 50%;
+            
+            span {
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
           }
           
           .option-reference-preview {
             margin-top: 4px;
             padding-left: 4px;
             border-left: 2px solid #e0e0e0;
+            width: 50%;
+            max-width: 50%;
           }
         }
         

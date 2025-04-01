@@ -85,23 +85,122 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
     };
   }, []);
 
-  // Determine dropdown position when it opens
-  useEffect(() => {
+  // Function to update dropdown dimensions
+  const updateDropdownDimensions = () => {
     if (isOpen && dropdownRef.current && dropdownMenuRef.current) {
       const selectorRect = dropdownRef.current.getBoundingClientRect();
-      const dropdownHeight = dropdownMenuRef.current.offsetHeight;
-      const viewportHeight = window.innerHeight;
-      const spaceBelow = viewportHeight - selectorRect.bottom;
       
-      // Calculate if dropdown should appear on top or bottom
-      // Add some buffer (20px) to make sure there's enough space
-      if (spaceBelow < dropdownHeight + 20 && selectorRect.top > dropdownHeight) {
-        setDropdownPosition('top');
-      } else {
+      // Find the variables-rows-container to adjust position
+      const variablesRowsContainer = document.querySelector('.variables-rows-container');
+      if (variablesRowsContainer) {
+        const containerRect = variablesRowsContainer.getBoundingClientRect();
+        
+        // Set fixed dropdown height - now controlled by CSS
+        const dropdownHeight = Math.floor(window.innerHeight * 0.4); // 40vh
+        
+        // Check if dropdown extends outside the container
+        const dropdownWidth = dropdownMenuRef.current.offsetWidth;
+        
+        // Adjust horizontal position if needed
+        if (selectorRect.left + dropdownWidth > containerRect.right) {
+          const overflowRight = selectorRect.left + dropdownWidth - containerRect.right;
+          const newLeft = Math.max(0, selectorRect.left - overflowRight - 10); // 10px buffer
+          
+          // Adjust position relative to the parent element
+          const adjustedLeft = Math.max(0, newLeft - selectorRect.left);
+          dropdownMenuRef.current.style.left = `${adjustedLeft}px`;
+        } else if (selectorRect.left < containerRect.left) {
+          // If dropdown extends beyond left edge of container
+          const adjustedLeft = containerRect.left - selectorRect.left + 5; // 5px buffer
+          dropdownMenuRef.current.style.left = `${adjustedLeft}px`;
+        } else {
+          dropdownMenuRef.current.style.left = '0'; // Reset if no adjustment needed
+        }
+        
+        // Always set dropdown position to bottom
         setDropdownPosition('bottom');
+        
+        // Check if this is one of the last 5 items in the list
+        let isLastFiveElements = false;
+        
+        // Get all rows in the container
+        const allRows = document.querySelectorAll('.variables-row');
+        if (allRows.length > 0) {
+          // Find which row contains this dropdown
+          const parentRow = dropdownRef.current.closest('.variables-row');
+          if (parentRow) {
+            // Convert NodeList to Array for indexOf
+            const rowsArray = Array.from(allRows);
+            const rowIndex = rowsArray.indexOf(parentRow as HTMLElement);
+            
+            // Check if it's one of the last 5 elements
+            if (rowIndex >= rowsArray.length - 5 && rowIndex !== -1) {
+              isLastFiveElements = true;
+            }
+          }
+        }
+        
+        // If dropdown would extend below container, add sufficient scroll to show it completely
+        if (selectorRect.bottom + dropdownHeight > containerRect.bottom) {
+          // Calculate how much of the dropdown would be hidden
+          const hiddenAmount = (selectorRect.bottom + dropdownHeight) - containerRect.bottom;
+          
+          // Add extra space to ensure it's fully visible (plus 20px buffer)
+          let scrollOffset = hiddenAmount + 20;
+          
+          // Add 10% extra scroll for last 5 elements
+          if (isLastFiveElements) {
+            const extraScroll = containerRect.height * 0.1; // 10% of container height
+            scrollOffset += extraScroll;
+          }
+          
+          // Scroll the container to show the dropdown
+          if (variablesRowsContainer.scrollTop + variablesRowsContainer.clientHeight < variablesRowsContainer.scrollHeight) {
+            // Use a small timeout to ensure scroll happens after the dropdown is rendered
+            setTimeout(() => {
+              variablesRowsContainer.scrollBy({ 
+                top: scrollOffset, 
+                behavior: 'smooth' 
+              });
+            }, 50);
+          }
+        } else if (isLastFiveElements) {
+          // Even if dropdown fits, add 10% extra scroll for last 5 elements
+          const extraScroll = containerRect.height * 0.1; // 10% of container height
+          
+          setTimeout(() => {
+            variablesRowsContainer.scrollBy({ 
+              top: extraScroll, 
+              behavior: 'smooth' 
+            });
+          }, 50);
+        }
       }
     }
+  };
+
+  // Determine dropdown position when it opens and handle window resize
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownDimensions();
+      
+      // Add resize listener when dropdown is open
+      window.addEventListener('resize', updateDropdownDimensions);
+      
+      // Cleanup listener when dropdown closes or component unmounts
+      return () => {
+        window.removeEventListener('resize', updateDropdownDimensions);
+      };
+    }
   }, [isOpen]);
+
+  // Reposition dropdown when search term changes (affects dropdown content height)
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to allow DOM to update
+      setTimeout(updateDropdownDimensions, 50);
+    }
+  }, [searchTerm, isOpen]);
 
   // Update custom value when variable value changes
   useEffect(() => {
@@ -122,7 +221,9 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
     const colorVariables = allVariables.filter(v => 
       v.isColor &&
       // Don't include the current variable itself (if it has an id)
-      !(variable.id && v.id === variable.id && v.modeId === variable.modeId)
+      !(variable.id && v.id === variable.id && v.modeId === variable.modeId) &&
+      // Don't include variables from the same collection
+      !(variable.collectionName && v.collectionName === variable.collectionName)
     );
     
     // Custom option for direct input

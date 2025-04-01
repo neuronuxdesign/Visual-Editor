@@ -45,7 +45,7 @@
     height: 100%;
     overflow: hidden;
     position: relative;
-    border: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
     border-radius: 4px;
     max-height: calc(100vh - 530px); /* Prevent growing too large */
   }
@@ -75,6 +75,7 @@
       overflow-y: auto;
       overflow-x: auto; /* Use auto instead of scroll for better appearance */
       position: relative;
+      padding-bottom: 50px; /* Add bottom padding for additional scroll space */
     }
 
     .variables-row {
