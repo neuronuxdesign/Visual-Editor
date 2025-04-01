@@ -25,11 +25,17 @@ function App() {
   // Create a ref to pass to the VisualEditor for tracking API calls
   const editorApiCallRef = useRef<VisualEditorRefHandle>(null);
 
+  // Initialize with values from environment variables on first load
   useEffect(() => {
-    // Initialize with Figma file IDs and manual input state
+    // Start with Test space by default
+    const initialSpace = figmaConfig.getSelectedSpace();
+    console.log(`Initializing with space: ${initialSpace}`);
+    
+    // Set the UI state
+    setSelectedSpace(initialSpace);
     setIsManualInputAllowed(figmaConfig.isManualFileIdAllowed());
     
-    // Initialize file IDs
+    // Load file IDs for the initial space
     setFigmaFileId(figmaConfig.getStoredFigmaFileId());
     setThemeFigmaFileId(figmaConfig.getStoredThemeFigmaFileId());
     setAllColorsFigmaFileId(figmaConfig.getStoredAllColorsFigmaFileId());
@@ -37,31 +43,42 @@ function App() {
 
   const handleSpaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSpace = e.target.value;
+    console.log(`Switching space to: ${newSpace}`);
+    
+    // Update space in state and localStorage
     setSelectedSpace(newSpace);
     figmaConfig.setSelectedSpace(newSpace);
 
-    // Update manual input allowed state
+    // Update manual input allowed state (only for Test space)
     const manualAllowed = newSpace === figmaConfig.SPACES.TEST;
     setIsManualInputAllowed(manualAllowed);
     
-    // Load space-specific file IDs
-    setFigmaFileId(figmaConfig.getDefaultMappedFileId());
-    setThemeFigmaFileId(figmaConfig.getDefaultThemeFileId());
+    // Always load fresh values from environment variables when switching spaces
+    const mappedFileId = figmaConfig.getDefaultMappedFileId();
+    const themeFileId = figmaConfig.getDefaultThemeFileId();
+    console.log(`Loading env values for ${newSpace}:`);
+    console.log(`- Mapped file ID: ${mappedFileId}`);
+    console.log(`- Theme file ID: ${themeFileId}`);
     
-    // Reset all colors file ID when changing space
-    if (newSpace !== figmaConfig.getSelectedSpace()) {
-      setAllColorsFigmaFileId('');
-      localStorage.removeItem(figmaConfig.STORAGE_KEYS.ALL_COLORS_FIGMA_FILE_ID);
-    }
+    // Update state with the new values
+    setFigmaFileId(mappedFileId);
+    setThemeFigmaFileId(themeFileId);
+    setAllColorsFigmaFileId(''); // Reset all colors file ID
     
-    // Force VisualEditor to reload by triggering a key change
+    // Force VisualEditor to reload completely by incrementing its key
     setForceReloadKey(prevKey => prevKey + 1);
   };
 
   const handleSetFigmaFileId = () => {
+    // Only allow setting file IDs in Test space
+    if (!isManualInputAllowed) return;
+    
     if (!figmaFileId.trim()) return;
     
     setIsSubmitting(true);
+    console.log(`Saving custom file IDs for Test space`);
+    
+    // Store in localStorage (only for Test space)
     figmaConfig.storeFigmaFileId(figmaFileId.trim());
     
     // Store theme file ID if provided
@@ -81,9 +98,9 @@ function App() {
   };
 
   const handlePageChange = (page: 'editor' | 'figmaTest') => {
-    // If switching from FigmaTest back to editor, we don't want to trigger a new API call
+    // If switching from FigmaTest back to editor, don't trigger a new API call
     if (currentPage === 'figmaTest' && page === 'editor') {
-      // Ensure the editor won't make duplicate API calls when switching back
+      // Reset API call state when switching back
       if (editorApiCallRef.current) {
         editorApiCallRef.current.resetApiCallState();
       }
@@ -152,6 +169,7 @@ function App() {
               value={allColorsFigmaFileId} 
               onChange={(e) => setAllColorsFigmaFileId(e.target.value)}
               placeholder="Enter All Colors Figma File ID"
+              disabled={!isManualInputAllowed}
             />
           </label>
           <Button 

@@ -1,20 +1,21 @@
 import axios from 'axios';
 import figmaConfig from './figmaConfig';
 
-// Create a function to get the current Figma token based on the selected space
+// Get Figma token directly from environment variables via config
 const getFigmaToken = (): string => {
-  // Get token from localStorage (set in VisualEditor component)
-  const storedToken = localStorage.getItem('figmaApiKey');
-  // If there's a token in localStorage, use it; otherwise get from config
-  return storedToken || figmaConfig.getFigmaToken();
+  // Always get fresh token from environment variables based on selected space
+  return figmaConfig.getFigmaToken();
 };
 
 // Create a function to get a configured axios instance with the current token
 const getApiClient = () => {
+  // Get token at request time to ensure we have the latest
+  const token = getFigmaToken();
+  
   return axios.create({
     baseURL: 'https://api.figma.com/v1',
     headers: {
-      'X-Figma-Token': getFigmaToken(),
+      'X-Figma-Token': token,
     }
   });
 };
@@ -49,6 +50,7 @@ export const validateToken = async () => {
  */
 export const getLocalVariables = async (fileId: string) => {
   try {
+    // Use a fresh API client for each request to ensure correct token
     const response = await getApiClient().get(`/files/${fileId}/variables/local`);
     return response.data;
   } catch (error) {
@@ -77,6 +79,7 @@ export interface FigmaVariablePayload {
  */
 export const postVariables = async (fileId: string, variables: FigmaVariablePayload) => {
   try {
+    // Use a fresh API client for each request to ensure correct token
     const response = await getApiClient().post(`/files/${fileId}/variables`, variables);
     return response.data;
   } catch (error) {

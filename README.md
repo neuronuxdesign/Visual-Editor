@@ -22,6 +22,27 @@ cd visual-editor
 npm install
 ```
 
+3. Set up environment variables
+
+Create a `.env` file in the root of your project with the following variables:
+
+```
+# Test space
+VITE_FIGMA_TOKEN=your_figma_token
+VITE_FIGMA_FILE_NAME=your_figma_file_id
+VITE_FIGMA_FILE_NAME_THEME=your_theme_figma_file_id
+
+# Neuron space
+VITE_FIGMA_TOKEN_NEURON=neuron_figma_token
+VITE_FIGMA_FILE_NAME_NEURON=neuron_mapped_file_id
+VITE_FIGMA_FILE_NAME_NEURON_THEME=neuron_theme_file_id
+
+# HMH space
+VITE_FIGMA_TOKEN_HMH=hmh_figma_token
+VITE_FIGMA_FILE_NAME_HMH=hmh_mapped_file_id
+VITE_FIGMA_FILE_NAME_HMH_THEME=hmh_theme_file_id
+```
+
 ### Development
 
 To start the development server:
@@ -45,6 +66,29 @@ npm run build
   - `App.css` - Application styles
   - `index.css` - Global styles
   - `main.tsx` - Application entry point
+  - `utils/figmaConfig.ts` - Configuration for Figma integration
+  - `utils/figmaApi.ts` - API utilities for Figma integration
+
+## Space Configuration
+
+The application supports multiple spaces:
+
+1. **Test Space** - For testing and development
+   - Uses `VITE_FIGMA_TOKEN` and `VITE_FIGMA_FILE_NAME`
+   - Uses `VITE_FIGMA_FILE_NAME_THEME` for theme variables
+   - Allows manual input of file IDs
+
+2. **Neuron Space** - For the Neuron design system
+   - Uses `VITE_FIGMA_TOKEN_NEURON` (dedicated token for Neuron)
+   - Uses `VITE_FIGMA_FILE_NAME_NEURON` for mapped variables
+   - Uses `VITE_FIGMA_FILE_NAME_NEURON_THEME` for theme variables
+
+3. **HMH Space** - For the HMH design system
+   - Uses `VITE_FIGMA_TOKEN_HMH` (dedicated token)
+   - Uses `VITE_FIGMA_FILE_NAME_HMH` for mapped variables
+   - Uses `VITE_FIGMA_FILE_NAME_HMH_THEME` for theme variables
+
+Each space has its own configuration for Figma tokens and file IDs. The space selector in the UI allows switching between these spaces.
 
 ## Technologies
 

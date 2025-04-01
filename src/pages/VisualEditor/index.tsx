@@ -154,6 +154,7 @@ const resolveVariableChain = (variableId: string, allVars: Variable[]): Variable
 // Add the debug component
 const SpaceDebugInfo = ({ selectedSpace }: { selectedSpace: string }) => {
   const [showDebug, setShowDebug] = useState(false);
+  // Get the debug info for the current configuration
   const debugInfo = figmaConfig.debugEnvironmentVariables();
   
   return (
@@ -162,12 +163,12 @@ const SpaceDebugInfo = ({ selectedSpace }: { selectedSpace: string }) => {
         className="debug-toggle"
         onClick={() => setShowDebug(!showDebug)}
       >
-        {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
+        {showDebug ? 'Hide Debug Info' : `Show Debug Info (${selectedSpace})`}
       </button>
       
       {showDebug && (
         <div className="debug-container">
-          <h3>Space Configuration Debug</h3>
+          <h3>Space Configuration Debug: {selectedSpace}</h3>
           <table className="debug-table">
             <tbody>
               {Object.entries(debugInfo).map(([key, value]) => (
@@ -234,19 +235,23 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     }
   }));
 
-  // Initialize with stored API key if available
+  // Initialize with API token from environment variables
   useEffect(() => {
-    // Get the API token based on selected space
+    console.log(`VisualEditor: Space is set to ${selectedSpace}`);
+    
+    // Get the API token based on selected space via figmaConfig (pulls from env vars)
     const token = figmaConfig.getFigmaToken();
     
     if (token) {
       setFigmaApiKey(token);
-      // Store the token for later use by the figmaApi module
-      localStorage.setItem('figmaApiKey', token);
+      console.log(`Using token for space: ${selectedSpace}`);
     } else {
-      // Set default value as shown in the image
-      setFigmaApiKey('32SDKSD2312FERF');
+      setFigmaApiKey('');
+      console.error(`No Figma token available for space: ${selectedSpace}`);
     }
+    
+    // Reset API call tracking when space changes
+    initialApiCallMadeRef.current = false;
   }, [selectedSpace]); // Re-run when space changes
 
   // Load Figma variable data when space changes
@@ -255,15 +260,19 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     // Without any specific space change
     const isInitialMount = !hasInitializedRef.current;
     
-    // Skip entirely if this is a duplicate API call during initial rendering
-    // This prevents the duplicate calls commonly seen with React Strict Mode
-    if (!isInitialMount && initialApiCallMadeRef.current && selectedSpace === figmaConfig.getSelectedSpace()) {
-      console.log('Skipping duplicate API call - space has not actually changed');
+    // Skip processing in these cases:
+    // 1. If this is not the initial mount AND we already made an API call for this space
+    // 2. If the selected space in props doesn't match what's in localStorage 
+    //    (means App is still updating and will trigger this effect again)
+    if ((!isInitialMount && initialApiCallMadeRef.current) || 
+        (selectedSpace !== figmaConfig.getSelectedSpace())) {
+      console.log('Skipping duplicate API call - waiting for space to fully update');
       return;
     }
     
-    // Track that we're making an API call for this space
+    // Mark that we're processing this space to prevent duplicate calls
     initialApiCallMadeRef.current = true;
+    console.log(`Making API call for space: ${selectedSpace} (isInitialMount: ${isInitialMount})`);
 
     // Log whether this is first load or space change
     if (hasInitializedRef.current) {

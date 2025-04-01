@@ -1491,17 +1491,18 @@ input[type="text"] {
   width: 100%;
 }
 
-/* Space debug styles */
+/* Space Debug Info component styles */
 .space-debug-info {
-  margin: 10px 0;
+  margin-top: 20px;
+  padding: 10px;
   
   .debug-toggle {
     background-color: #f0f0f0;
-    border: 1px solid #ddd;
+    border: 1px solid #ccc;
     border-radius: 4px;
-    padding: 5px 10px;
-    font-size: 12px;
+    padding: 8px 12px;
     cursor: pointer;
+    font-size: 14px;
     
     &:hover {
       background-color: #e0e0e0;
@@ -1511,42 +1512,44 @@ input[type="text"] {
   .debug-container {
     margin-top: 10px;
     padding: 10px;
-    background-color: #f8f8f8;
+    background-color: #f8f9fa;
     border: 1px solid #ddd;
     border-radius: 4px;
+    max-height: 400px;
+    overflow-y: auto;
     
     h3 {
+      font-size: 16px;
       margin-bottom: 10px;
-      font-size: 14px;
       font-weight: 600;
     }
     
     .debug-table {
       width: 100%;
-      font-size: 12px;
-      
-      tr {
-        &:nth-child(even) {
-          background-color: #f0f0f0;
-        }
-      }
+      border-collapse: collapse;
       
       td {
-        padding: 4px 8px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
         
         &.debug-key {
-          font-weight: 600;
+          font-weight: 500;
           width: 40%;
         }
         
         &.debug-value {
-          width: 60%;
           font-family: monospace;
+          word-break: break-all;
         }
+      }
+      
+      tr:last-child td {
+        border-bottom: none;
       }
     }
   }
 }
+
 .react-select-container.modes-select-container{
   width: 50vw;
 }

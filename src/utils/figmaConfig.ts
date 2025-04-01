@@ -1,17 +1,17 @@
 // Store configuration for Figma integration
 
 // Default Figma file ID - you can also store this in environment variables as VITE_FIGMA_FILE_ID
-export const DEFAULT_FIGMA_FILE_ID = '3NX1nspmurjj9kqyuhOKXH';
+export const DEFAULT_FIGMA_FILE_ID = '';
 
 // Environment variable keys
 export const ENV_KEYS = {
   // Test space environment variables
   FIGMA_TOKEN: 'VITE_FIGMA_TOKEN',
   FIGMA_FILE_ID: 'VITE_FIGMA_FILE_NAME',
+  FIGMA_THEME_FILE_ID: 'VITE_FIGMA_FILE_NAME_THEME', // Add Theme file ID for Test space
   
   // Neuron space environment variables
-  // Note: Neuron uses the same token as Test but different file IDs
-  FIGMA_TOKEN_NEURON: 'VITE_FIGMA_TOKEN',
+  FIGMA_TOKEN_NEURON: 'VITE_FIGMA_TOKEN_NEURON', // Use dedicated Neuron token
   FIGMA_FILE_ID_NEURON: 'VITE_FIGMA_FILE_NAME_NEURON', // Specifically for Neuron mapped file
   FIGMA_THEME_FILE_ID_NEURON: 'VITE_FIGMA_FILE_NAME_NEURON_THEME', // Neuron theme file
   
@@ -36,17 +36,16 @@ export const SPACES = {
   HMH: 'HMH'
 };
 
-// Local storage keys
+// Local storage keys - only used for user manual inputs in Test space
 export const STORAGE_KEYS = {
   FIGMA_FILE_ID: 'figma-file-id',
   THEME_FIGMA_FILE_ID: 'theme-figma-file-id',
   ALL_COLORS_FIGMA_FILE_ID: 'all-colors-figma-file-id',
-  LAST_USED_PROJECT: 'last-used-project',
   SELECTED_SPACE: 'selected-space',
 };
 
 /**
- * Get the currently selected space from localStorage
+ * Get the currently selected space from localStorage, defaults to Test
  */
 export const getSelectedSpace = (): string => {
   return localStorage.getItem(STORAGE_KEYS.SELECTED_SPACE) || SPACES.TEST;
@@ -61,6 +60,7 @@ export const setSelectedSpace = (space: string): void => {
 
 /**
  * Get the appropriate Figma API token based on selected space
+ * Always pulls directly from environment variables
  */
 export const getFigmaToken = (): string => {
   const space = getSelectedSpace();
@@ -78,24 +78,25 @@ export const getFigmaToken = (): string => {
 
 /**
  * Get the default mapped Figma file ID based on selected space
+ * Always pulls from environment variables
  */
 export const getDefaultMappedFileId = (): string => {
   const space = getSelectedSpace();
   
   switch (space) {
     case SPACES.NEURON:
-      // For Neuron space, always use VITE_FIGMA_FILE_NAME_NEURON environment variable
-      return import.meta.env[ENV_KEYS.FIGMA_FILE_ID_NEURON] || DEFAULT_FIGMA_FILE_ID;
+      return import.meta.env[ENV_KEYS.FIGMA_FILE_ID_NEURON] || '';
     case SPACES.HMH:
-      return import.meta.env[ENV_KEYS.FIGMA_FILE_ID_HMH] || DEFAULT_FIGMA_FILE_ID;
+      return import.meta.env[ENV_KEYS.FIGMA_FILE_ID_HMH] || '';
     case SPACES.TEST:
     default:
-      return import.meta.env[ENV_KEYS.FIGMA_FILE_ID] || DEFAULT_FIGMA_FILE_ID;
+      return import.meta.env[ENV_KEYS.FIGMA_FILE_ID] || '';
   }
 };
 
 /**
  * Get the default theme Figma file ID based on selected space
+ * Always pulls from environment variables
  */
 export const getDefaultThemeFileId = (): string => {
   const space = getSelectedSpace();
@@ -107,12 +108,13 @@ export const getDefaultThemeFileId = (): string => {
       return import.meta.env[ENV_KEYS.FIGMA_THEME_FILE_ID_HMH] || '';
     case SPACES.TEST:
     default:
-      return '';
+      return import.meta.env[ENV_KEYS.FIGMA_THEME_FILE_ID] || '';
   }
 };
 
 /**
  * Check if the current space allows manual file ID input
+ * Only Test space allows manual input
  */
 export const isManualFileIdAllowed = (): boolean => {
   const space = getSelectedSpace();
@@ -120,53 +122,62 @@ export const isManualFileIdAllowed = (): boolean => {
 };
 
 /**
- * Get the stored Figma file ID from localStorage or use the default
+ * Get the Figma file ID - uses localStorage only for Test space
+ * For other spaces, always uses environment variables
  */
 export const getStoredFigmaFileId = (): string => {
-  // If we're in a preset space, use the default file ID for that space
-  if (!isManualFileIdAllowed()) {
+  const space = getSelectedSpace();
+  
+  if (space !== SPACES.TEST) {
+    // For non-Test spaces, always use environment variables
     return getDefaultMappedFileId();
   }
   
-  // Otherwise use from localStorage
-  return localStorage.getItem(STORAGE_KEYS.FIGMA_FILE_ID) || DEFAULT_FIGMA_FILE_ID;
+  // For Test space, check if there's a user-entered value, otherwise use env var
+  const storedValue = localStorage.getItem(STORAGE_KEYS.FIGMA_FILE_ID);
+  return storedValue || getDefaultMappedFileId();
 };
 
 /**
- * Store a Figma file ID in localStorage
+ * Store a Figma file ID in localStorage - only for Test space
  */
 export const storeFigmaFileId = (fileId: string): void => {
-  // Only store if we're in a space that allows manual file ID input
+  // Only store if we're in Test space
   if (isManualFileIdAllowed()) {
     localStorage.setItem(STORAGE_KEYS.FIGMA_FILE_ID, fileId);
   }
 };
 
 /**
- * Get the stored Theme Figma file ID from localStorage
+ * Get the Theme Figma file ID - uses localStorage only for Test space
+ * For other spaces, always uses environment variables
  */
 export const getStoredThemeFigmaFileId = (): string => {
-  // If we're in a preset space, use the default theme file ID for that space
-  if (!isManualFileIdAllowed()) {
+  const space = getSelectedSpace();
+  
+  if (space !== SPACES.TEST) {
+    // For non-Test spaces, always use environment variables
     return getDefaultThemeFileId();
   }
   
-  // Otherwise use from localStorage
-  return localStorage.getItem(STORAGE_KEYS.THEME_FIGMA_FILE_ID) || '';
+  // For Test space, check if there's a user-entered value, otherwise use env var
+  const storedValue = localStorage.getItem(STORAGE_KEYS.THEME_FIGMA_FILE_ID);
+  return storedValue || getDefaultThemeFileId();
 };
 
 /**
- * Store a Theme Figma file ID in localStorage
+ * Store a Theme Figma file ID in localStorage - only for Test space
  */
 export const storeThemeFigmaFileId = (fileId: string): void => {
-  // Only store if we're in a space that allows manual file ID input
+  // Only store if we're in Test space
   if (isManualFileIdAllowed()) {
     localStorage.setItem(STORAGE_KEYS.THEME_FIGMA_FILE_ID, fileId);
   }
 };
 
 /**
- * Get the stored All Colors Figma file ID from localStorage
+ * Get the All Colors Figma file ID
+ * This is always from localStorage as it's not in environment variables
  */
 export const getStoredAllColorsFigmaFileId = (): string => {
   return localStorage.getItem(STORAGE_KEYS.ALL_COLORS_FIGMA_FILE_ID) || '';
@@ -176,7 +187,6 @@ export const getStoredAllColorsFigmaFileId = (): string => {
  * Store an All Colors Figma file ID in localStorage
  */
 export const storeAllColorsFigmaFileId = (fileId: string): void => {
-  // Always allow storing the all colors file ID regardless of space
   localStorage.setItem(STORAGE_KEYS.ALL_COLORS_FIGMA_FILE_ID, fileId);
 };
 
@@ -193,11 +203,14 @@ export const getFigmaFileIdForProject = (projectKey: string): string => {
  */
 export const debugEnvironmentVariables = (): Record<string, string | undefined> => {
   const env = import.meta.env;
+  const space = getSelectedSpace();
+  
   return {
     // Test Space
     [ENV_KEYS.FIGMA_TOKEN]: typeof env[ENV_KEYS.FIGMA_TOKEN] === 'string' ? 
       `${env[ENV_KEYS.FIGMA_TOKEN].substring(0, 4)}...` : 'not set',
     [ENV_KEYS.FIGMA_FILE_ID]: env[ENV_KEYS.FIGMA_FILE_ID] || 'not set',
+    [ENV_KEYS.FIGMA_THEME_FILE_ID]: env[ENV_KEYS.FIGMA_THEME_FILE_ID] || 'not set',
     
     // Neuron Space
     [ENV_KEYS.FIGMA_TOKEN_NEURON]: typeof env[ENV_KEYS.FIGMA_TOKEN_NEURON] === 'string' ? 
@@ -211,13 +224,13 @@ export const debugEnvironmentVariables = (): Record<string, string | undefined> 
     [ENV_KEYS.FIGMA_FILE_ID_HMH]: env[ENV_KEYS.FIGMA_FILE_ID_HMH] || 'not set',
     [ENV_KEYS.FIGMA_THEME_FILE_ID_HMH]: env[ENV_KEYS.FIGMA_THEME_FILE_ID_HMH] || 'not set',
     
-    // Current space and allowed status
-    'Selected Space': getSelectedSpace(),
+    // Current space and status
+    'Selected Space': space,
     'Manual Input Allowed': isManualFileIdAllowed() ? 'Yes' : 'No',
-    'Current Figma Token': getFigmaToken() ? `${getFigmaToken().substring(0, 4)}...` : 'not set',
-    'Current Mapped File ID': getStoredFigmaFileId() || 'not set',
-    'Current Theme File ID': getStoredThemeFigmaFileId() || 'not set',
-    'Current All Colors File ID': getStoredAllColorsFigmaFileId() || 'not set'
+    'Active Token': getFigmaToken() ? `${getFigmaToken().substring(0, 4)}...` : 'not set',
+    'Active Mapped File ID': getStoredFigmaFileId() || 'not set',
+    'Active Theme File ID': getStoredThemeFigmaFileId() || 'not set',
+    'Active All Colors File ID': getStoredAllColorsFigmaFileId() || 'not set'
   };
 };
 
