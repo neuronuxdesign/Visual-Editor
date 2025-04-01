@@ -67,7 +67,7 @@ const ColorPreview: React.FC<ColorPreviewProps> = ({
           rgba({Math.round(color.r > 1 ? color.r : color.r * 255)}, 
                {Math.round(color.g > 1 ? color.g : color.g * 255)}, 
                {Math.round(color.b > 1 ? color.b : color.b * 255)}, 
-               {color.a || 1})
+               {Math.round(color.a * 10)/10 || 1})
         </span>
       )}
     </div>

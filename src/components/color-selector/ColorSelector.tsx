@@ -48,7 +48,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [customValue, setCustomValue] = useState(variable.value);
-  const [customAlpha, setCustomAlpha] = useState((variable.rawValue as RGBAValue)?.a || 1);
+  const [customAlpha, setCustomAlpha] = useState(Math.round(((variable.rawValue as RGBAValue)?.a || 1) * 100) / 100);
   const [lastAppliedValue, setLastAppliedValue] = useState(variable.value);
   const [dropdownPosition, setDropdownPosition] = useState<'top' | 'bottom'>('bottom');
   const [originalValue, setOriginalValue] = useState<{
@@ -65,7 +65,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
       setOriginalValue({
         value: variable.value,
         rawValue: variable.rawValue as RGBAValue,
-        // @ts-ignore - Known type issue to bypass for build
+        // @ts-expect-error - Known type issue to bypass for build
         referencedVariable: variable.referencedVariable
       });
     }
@@ -108,7 +108,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
     // Don't set custom value if this is a reference variable (VARIABLE_ALIAS)
     if (!variable.referencedVariable) {
       setCustomValue(variable.value);
-      setCustomAlpha((variable.rawValue as RGBAValue)?.a || 1);
+      setCustomAlpha(Math.round(((variable.rawValue as RGBAValue)?.a || 1) * 100) / 100);
     } else {
       // Clear the custom value for reference variables
       setCustomValue('');
@@ -216,7 +216,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
         r: r,
         g: g,
         b: b,
-        a: customAlpha
+        a: Math.round(customAlpha * 100) / 100
       };
       
       console.log('[DEBUG] ColorSelector creating RGB value with alpha:', {
@@ -436,7 +436,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
                   />
                 </div>
                 <div className="alpha-control" key={`${instanceId}-alpha-control`}>
-                  <label htmlFor={`alphaSlider-${instanceId}`}>Alpha: {customAlpha.toFixed(1)}</label>
+                  <label htmlFor={`alphaSlider-${instanceId}`}>Alpha: {(Math.round(customAlpha * 100) / 100).toFixed(2)}</label>
                   <input
                     id={`alphaSlider-${instanceId}`}
                     type="range"
@@ -444,7 +444,7 @@ const ColorSelector: React.FC<ColorSelectorProps> = ({
                     max="1"
                     step="0.1"
                     value={customAlpha}
-                    onChange={(e) => setCustomAlpha(parseFloat(e.target.value))}
+                    onChange={(e) => setCustomAlpha(Math.round(parseFloat(e.target.value) * 100) / 100)}
                     style={{
                       // Create a gradient from transparent to the current color
                       background: `linear-gradient(to right, rgba(${customValue || '0, 0, 0'}, 0), rgba(${customValue || '0, 0, 0'}, 1))`
