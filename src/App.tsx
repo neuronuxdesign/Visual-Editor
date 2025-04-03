@@ -1,9 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
-import VisualEditor, { VisualEditorRefHandle } from './pages/VisualEditor'
+import { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
+import VisualEditor from './pages/VisualEditor'
 import FigmaTest from './pages/FigmaTest'
+import CustomVariableEditor from './pages/CustomVariableEditor'
 import './App.scss'
 import figmaConfig from './utils/figmaConfig'
 import Button from './ui/Button'
+
+// Base path for the application
+const BASE_PATH = '/Visual-Editor/';
 
 // Create space options array for the selector
 const spaceOptions = [
@@ -12,18 +17,16 @@ const spaceOptions = [
   { value: figmaConfig.SPACES.HMH, label: 'HMH' }
 ];
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<'editor' | 'figmaTest'>('editor');
+// Navigation component
+const Navigation = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [figmaFileId, setFigmaFileId] = useState('');
   const [themeFigmaFileId, setThemeFigmaFileId] = useState('');
   const [allColorsFigmaFileId, setAllColorsFigmaFileId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSpace, setSelectedSpace] = useState(figmaConfig.getSelectedSpace());
   const [isManualInputAllowed, setIsManualInputAllowed] = useState(figmaConfig.isManualFileIdAllowed());
-  const [forceReloadKey, setForceReloadKey] = useState(0);
-  
-  // Create a ref to pass to the VisualEditor for tracking API calls
-  const editorApiCallRef = useRef<VisualEditorRefHandle>(null);
 
   // Initialize with values from environment variables on first load
   useEffect(() => {
@@ -39,7 +42,20 @@ function App() {
     setFigmaFileId(figmaConfig.getStoredFigmaFileId());
     setThemeFigmaFileId(figmaConfig.getStoredThemeFigmaFileId());
     setAllColorsFigmaFileId(figmaConfig.getStoredAllColorsFigmaFileId());
-  }, []);
+
+    // When using Router with basename, we don't need to add BASE_PATH to these paths
+    const path = location.pathname;
+    if (path === '/' || path === '') {
+      navigate('/', { replace: true });
+    } else if (path === '/figma-test') {
+      navigate('/figma-test', { replace: true });
+    } else if (path === '/custom-editor') {
+      navigate('/custom-editor', { replace: true });
+    } else if (!location.pathname.match(/^\/(figma-test|custom-editor)?$/)) {
+      // Redirect to home if path is not recognized
+      navigate('/', { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   const handleSpaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSpace = e.target.value;
@@ -64,9 +80,6 @@ function App() {
     setFigmaFileId(mappedFileId);
     setThemeFigmaFileId(themeFileId);
     setAllColorsFigmaFileId(''); // Reset all colors file ID
-    
-    // Force VisualEditor to reload completely by incrementing its key
-    setForceReloadKey(prevKey => prevKey + 1);
   };
 
   const handleSetFigmaFileId = () => {
@@ -97,110 +110,109 @@ function App() {
     }, 500);
   };
 
-  const handlePageChange = (page: 'editor' | 'figmaTest') => {
-    // If switching from FigmaTest back to editor, don't trigger a new API call
-    if (currentPage === 'figmaTest' && page === 'editor') {
-      // Reset API call state when switching back
-      if (editorApiCallRef.current) {
-        editorApiCallRef.current.resetApiCallState();
-      }
-    }
-    
-    setCurrentPage(page);
-  };
-
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="app-nav">
-          <button 
-            onClick={() => handlePageChange('editor')}
-            className={currentPage === 'editor' ? 'active' : ''}
+    <header className="app-header">
+      <div className="app-nav">
+        <Link 
+          to="/"
+          className={location.pathname === '/' || location.pathname === '' ? 'active' : ''}
+        >
+          Visual Editor
+        </Link>
+        <Link 
+          to="/figma-test"
+          className={location.pathname === '/figma-test' ? 'active' : ''}
+        >
+          Figma API Test
+        </Link>
+        <Link 
+          to="/custom-editor"
+          className={location.pathname === '/custom-editor' ? 'active' : ''}
+        >
+          Custom Editor
+        </Link>
+      </div>
+      <div className="file-id-control">
+        <label>
+          Space:
+          <select
+            value={selectedSpace}
+            onChange={handleSpaceChange}
+            className="space-selector"
           >
-            Visual Editor
-          </button>
-          <button 
-            onClick={() => handlePageChange('figmaTest')}
-            className={currentPage === 'figmaTest' ? 'active' : ''}
-          >
-            Figma API Test
-          </button>
-        </div>
-        <div className="file-id-control">
-          <label>
-            Space:
-            <select
-              value={selectedSpace}
-              onChange={handleSpaceChange}
-              className="space-selector"
-            >
-              {spaceOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          
-          <label>
-            Mapped Figma File ID:
-            <input 
-              type="text" 
-              value={figmaFileId} 
-              onChange={(e) => setFigmaFileId(e.target.value)}
-              placeholder="Enter Mapped Figma File ID"
-              disabled={!isManualInputAllowed}
-            />
-          </label>
-          <label>
-            Theme Figma File ID:
-            <input 
-              type="text" 
-              value={themeFigmaFileId} 
-              onChange={(e) => setThemeFigmaFileId(e.target.value)}
-              placeholder="Enter Theme Figma File ID"
-              disabled={!isManualInputAllowed}
-            />
-          </label>
-          <label>
-            All Colors Figma File ID:
-            <input 
-              type="text" 
-              value={allColorsFigmaFileId} 
-              onChange={(e) => setAllColorsFigmaFileId(e.target.value)}
-              placeholder="Enter All Colors Figma File ID"
-              disabled={!isManualInputAllowed}
-            />
-          </label>
-          <Button 
-            variant="primary"
-            onClick={handleSetFigmaFileId}
-            disabled={isSubmitting || !isManualInputAllowed}
-            className="use-button"
-          >
-            {isSubmitting ? (
-              <>
-                <span className="spinner dark"></span>
-                Saving...
-              </>
-            ) : 'Use'}
-          </Button>
-        </div>
-      </header>
-
-      <main>
-        {currentPage === 'editor' ? (
-          <VisualEditor 
-            key={`visual-editor-${forceReloadKey}`}
-            selectedSpace={selectedSpace} 
-            ref={editorApiCallRef}
+            {spaceOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        
+        <label>
+          Mapped Figma File ID:
+          <input 
+            type="text" 
+            value={figmaFileId} 
+            onChange={(e) => setFigmaFileId(e.target.value)}
+            placeholder="Enter Mapped Figma File ID"
+            disabled={!isManualInputAllowed}
           />
-        ) : (
-          <FigmaTest />
-        )}
-      </main>
-    </div>
-  )
+        </label>
+        <label>
+          Theme Figma File ID:
+          <input 
+            type="text" 
+            value={themeFigmaFileId} 
+            onChange={(e) => setThemeFigmaFileId(e.target.value)}
+            placeholder="Enter Theme Figma File ID"
+            disabled={!isManualInputAllowed}
+          />
+        </label>
+        <label>
+          All Colors Figma File ID:
+          <input 
+            type="text" 
+            value={allColorsFigmaFileId} 
+            onChange={(e) => setAllColorsFigmaFileId(e.target.value)}
+            placeholder="Enter All Colors Figma File ID"
+            disabled={!isManualInputAllowed}
+          />
+        </label>
+        <Button 
+          variant="primary"
+          onClick={handleSetFigmaFileId}
+          disabled={isSubmitting || !isManualInputAllowed}
+          className="use-button"
+        >
+          {isSubmitting ? (
+            <>
+              <span className="spinner dark"></span>
+              Saving...
+            </>
+          ) : 'Use'}
+        </Button>
+      </div>
+    </header>
+  );
+};
+
+// Main App component
+function App() {
+  return (
+    <Router basename={BASE_PATH}>
+      <div className="app">
+        <Navigation />
+        <main>
+          <Routes>
+            <Route path="/" element={<VisualEditor selectedSpace={figmaConfig.getSelectedSpace()} />} />
+            <Route path="/figma-test" element={<FigmaTest />} />
+            <Route path="/custom-editor" element={<CustomVariableEditor />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  );
 }
 
 export default App

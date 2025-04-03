@@ -24,6 +24,9 @@ import MappingPreview from '../../components/mapping-preview/MappingPreview';
 import VariablesList from '../../components/variables-list/VariablesList';
 import VariableDetails from '../../components/variable-details/VariableDetails';
 
+// Import shared components
+import { SidebarHeader } from '../../components/shared';
+
 // Define the props interface
 interface VisualEditorProps {
   selectedSpace: string;
@@ -1718,6 +1721,30 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     return { r: 0, g: 0, b: 0, a: 1 };
   };
 
+  // Function to format values for Figma API
+  const formatValueForFigmaAPI = (value: unknown, valueType: string): unknown => {
+    // For FLOAT type, ensure it's a number
+    if (valueType === 'FLOAT') {
+      if (typeof value === 'string') {
+        const floatValue = parseFloat(value);
+        if (!isNaN(floatValue)) {
+          return floatValue;
+        }
+      } else if (typeof value === 'number') {
+        return value;
+      }
+      // Default value if parsing fails
+      return 0;
+    }
+    
+    // For color variables, handle correctly
+    if (valueType === 'COLOR' && typeof value === 'object') {
+      return value;
+    }
+    
+    // Return value as is for other types
+    return value;
+  };
 
   // Function to handle saving edited variables
   const handleSaveVariable = async (variable: Variable) => {
@@ -1835,37 +1862,9 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
           referencedName: latestVariable.referencedVariable.name,
           collection: latestVariable.referencedVariable.collection
         });
-      }
-      // For color variables, ensure proper RGBA format
-      else if (latestVariable.isColor) {
-        try {
-          // For color variables, make sure we're sending a properly normalized RGBA object
-          if (latestVariable.rawValue && typeof latestVariable.rawValue === 'object' && 'r' in latestVariable.rawValue) {
-            // Log the raw color values before formatting
-            console.log('[DEBUG] Raw color values before formatting:', latestVariable.rawValue);
-            
-            // We already have an RGBA object, just need to normalize it
-            formattedValue = formatColorForFigma(latestVariable.rawValue);
-          } else if (typeof latestVariable.value === 'string') {
-            // We have a string value, try to parse it
-            console.log('[DEBUG] Parsing color from string:', latestVariable.value);
-            formattedValue = formatColorForFigma(latestVariable.value);
-          } else {
-            throw new Error(`Unable to format color value: ${JSON.stringify(latestVariable.rawValue)}`);
-          }
-
-          console.log('[DEBUG] Formatted color value for Figma API:', {
-            formattedValue: JSON.stringify(formattedValue),
-            alpha: formattedValue && 
-                  typeof formattedValue === 'object' && 
-                  'a' in formattedValue ? 
-                  (formattedValue as RGBAValue).a : 'missing alpha',
-            rawRGBA: formattedValue
-          });
-        } catch (err) {
-          console.error('[DEBUG] Error formatting color value:', err);
-          throw new Error(`Failed to format color value: ${err instanceof Error ? err.message : String(err)}`);
-        }
+      } else {
+        // For non-alias variables, ensure proper formatting based on type
+        formattedValue = formatValueForFigmaAPI(latestVariable.rawValue, latestVariable.valueType);
       }
 
       // Prepare the API request data using the correct structure
@@ -2113,12 +2112,9 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
   return (
     <div className="app-container">
       <div className="sidebar">
-        <div className="sidebar-header">
-          <img src={ NeuronLogo } alt="NEURON Logo" className="sidebar-logo" />
-          <div className="space-indicator">
-            Space: {spaceOptions.find(o => o.value === selectedSpace)?.label || 'Test'}
-          </div>
-        </div>
+        <SidebarHeader 
+          logo={NeuronLogo} 
+        />
         <div className="sidebar-content">
           <TreeView 
             nodes={ treeData }

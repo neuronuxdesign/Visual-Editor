@@ -352,7 +352,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
           rawValue = { r: 255, g: 255, b: 255, a: 1 }; // Store raw RGB in 0-255 range with alpha
           isColor = true;
           break;
-        case 'NUMBER':
+        case 'FLOAT':
           initialValue = '0';
           rawValue = 0;
           break;
@@ -400,6 +400,31 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
     }
   };
 
+  // Add a function to properly format values for the Figma API
+  const formatValueForFigmaAPI = (value: unknown, valueType: string) => {
+    // For FLOAT type, ensure it's a number
+    if (valueType === 'FLOAT') {
+      if (typeof value === 'string') {
+        const floatValue = parseFloat(value);
+        if (!isNaN(floatValue)) {
+          return floatValue;
+        }
+      } else if (typeof value === 'number') {
+        return value;
+      }
+      // Default value if parsing fails
+      return 0;
+    }
+    
+    // For color variables, handle correctly
+    if (valueType === 'COLOR' && typeof value === 'object') {
+      return value;
+    }
+    
+    // Return value as is for other types
+    return value;
+  };
+
   const handleSaveNewVariable = async () => {
     if (!newVariable) return;
     
@@ -432,75 +457,59 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       // Get all modes from the collection
       const collectionModes = selectedCollection.modes || [];
       
-      // Ensure we include all selected modes (based on the three selected collection and variable group level)
-      // For each mode in the collection
-      for (const mode of collectionModes) {
-        const { modeId } = mode;
+      // Loop through all modes to prepare values
+      for (const modeId in newVariableModeValues) {
+        // For modes we have an explicit value for
+        const value = newVariableModeValues[modeId];
         
-        // Check if this mode is among the currently selected modes in the view
-        const isSelectedMode = selectedModes.some(selectedMode => selectedMode.modeId === modeId);
+        // For variable references
+        if (newVariable.valueType === 'VARIABLE_ALIAS' && newVariable.referencedVariable?.id) {
+          valuesByMode[modeId] = {
+            type: "VARIABLE_ALIAS",
+            id: newVariable.referencedVariable.id
+          };
+          continue;
+        }
         
-        if (newVariableModeValues[modeId] !== undefined) {
-          // We have a specific value for this mode
-          let modeValue = newVariableModeValues[modeId];
-          
-          // Format color values properly
-          if (newVariable.isColor && 
-              typeof modeValue === 'object' && 
-              modeValue !== null && 
-              !isObjectWithType(modeValue)) {
-            // It's a color value object, format it for Figma
-            modeValue = formatColorForFigma(modeValue);
-            
-            // Debug logging to verify alpha is preserved
-            if (typeof modeValue === 'object' && 'a' in modeValue) {
-              console.log('[DEBUG] Color value after formatting for Figma:', {
-                modeId,
-                alpha: (modeValue as RGBAValue).a,
-                original: typeof newVariableModeValues[modeId] === 'object' && 
-                          newVariableModeValues[modeId] !== null && 
-                          'a' in newVariableModeValues[modeId] ? 
-                          (newVariableModeValues[modeId] as RGBAValue).a : 'not found'
-              });
-            }
-          }
-          
-          valuesByMode[modeId] = modeValue;
-        } else if (modeId === defaultModeId) {
-          // For the default mode, use the main variable value if not explicitly set
-          let defaultValue = newVariable.isColor
-            ? formatColorForFigma(newVariable.rawValue || newVariable.value)
-            : newVariable.rawValue || '';
-          
-          // Ensure we preserve the alpha value for color variables
-          if (newVariable.isColor && 
-              newVariable.rawValue && 
-              typeof newVariable.rawValue === 'object' && 
-              'a' in newVariable.rawValue &&
-              typeof defaultValue === 'object' && 
-              'a' in defaultValue) {
-              
-            // Create a new object to avoid mutating the original returned by formatColorForFigma
-            const alpha = (newVariable.rawValue as RGBAValue).a;
-            defaultValue = {
-              ...(defaultValue as RGBAValue),
-              a: alpha
+        // Format the value for the API based on the variable type
+        valuesByMode[modeId] = formatValueForFigmaAPI(value, newVariable.valueType);
+      }
+      
+      // For the default mode and any selected modes that don't have an explicit value yet,
+      // use the main variable value or a sensible default
+      const availableModes = Object.values(collectionModes).map(m => m.modeId);
+      for (const modeData of availableModes) {
+        const modeId = typeof modeData === 'string' ? modeData : modeData;
+        
+        // Skip if we already have a value for this mode
+        if (valuesByMode[modeId]) continue;
+        
+        // Check if this is a mode we should include
+        const isDefaultMode = modeId === defaultModeId;
+        const isSelectedMode = selectedModes.some(m => m.modeId === modeId);
+        
+        if (isDefaultMode) {
+          // Always include the default mode
+          if (newVariable.valueType === 'VARIABLE_ALIAS' && newVariable.referencedVariable?.id) {
+            valuesByMode[modeId] = {
+              type: "VARIABLE_ALIAS",
+              id: newVariable.referencedVariable.id
             };
-            
-            console.log('[DEBUG] Preserving alpha in default mode value:', {
-              modeId,
-              alpha,
-              resultValue: defaultValue
-            });
+          } else if (newVariable.isColor) {
+            valuesByMode[modeId] = formatColorForFigma(newVariable.rawValue || newVariable.value);
+          } else {
+            // Format the value for the API based on the variable type
+            valuesByMode[modeId] = formatValueForFigmaAPI(
+              newVariable.rawValue || newVariable.value, 
+              newVariable.valueType
+            );
           }
-          
-          valuesByMode[modeId] = defaultValue;
         } else if (isSelectedMode) {
           // For selected modes that don't have a specific value yet,
           // use the default value to ensure they're included in the new variable
           let defaultValue = newVariable.isColor
             ? formatColorForFigma(newVariable.rawValue || newVariable.value)
-            : newVariable.rawValue || '';
+            : formatValueForFigmaAPI(newVariable.rawValue || newVariable.value, newVariable.valueType);
             
           // Ensure we preserve the alpha value for color variables
           if (newVariable.isColor && 
@@ -550,6 +559,8 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
         }))
       };
       
+      console.log('[DEBUG] Sending payload to Figma API:', JSON.stringify(payload, null, 2));
+
       // Get the file ID from config
       const fileId = figmaConfig.getStoredFigmaFileId();
       if (!fileId) {
@@ -615,7 +626,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
               >
                 <option value="STRING">STRING</option>
                 <option value="COLOR">COLOR</option>
-                <option value="NUMBER">NUMBER</option>
+                <option value="FLOAT">FLOAT</option>
                 <option value="BOOLEAN">BOOLEAN</option>
               </select>
             </div>
