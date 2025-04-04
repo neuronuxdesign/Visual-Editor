@@ -317,6 +317,49 @@ const VariablesList: React.FC<VariablesListProps> = ({
                                       return null;
                                     }
                                   })()}
+                                  
+                                  {/* Show string preview for STRING type variables */}
+                                  {modeVariable.valueType === 'STRING' && (() => {
+                                    try {
+                                      const stringValue = String(modeVariable.rawValue || modeVariable.value || '');
+                                      return (
+                                        <div className="string-preview" key={`string-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}>
+                                          <span className="string-value">{stringValue}</span>
+                                        </div>
+                                      );
+                                    } catch (error) {
+                                      console.error("Error rendering string preview:", error);
+                                      return null;
+                                    }
+                                  })()}
+                                  
+                                  {/* Show boolean preview for BOOLEAN type variables */}
+                                  {modeVariable.valueType === 'BOOLEAN' && (() => {
+                                    try {
+                                      // Convert to actual boolean value
+                                      let boolValue: boolean;
+                                      if (typeof modeVariable.rawValue === 'boolean') {
+                                        boolValue = modeVariable.rawValue;
+                                      } else if (typeof modeVariable.rawValue === 'string') {
+                                        boolValue = modeVariable.rawValue.toLowerCase() === 'true';
+                                      } else if (typeof modeVariable.value === 'string') {
+                                        boolValue = modeVariable.value.toLowerCase() === 'true';
+                                      } else {
+                                        boolValue = Boolean(modeVariable.rawValue || modeVariable.value);
+                                      }
+
+                                      return (
+                                        <div className="boolean-preview" key={`boolean-preview-${modeVariable.id}-${modeVariable.modeId}-${uniqueId}`}>
+                                          <span className={`boolean-value ${boolValue ? 'true' : 'false'}`}>
+                                            {boolValue ? 'True' : 'False'}
+                                          </span>
+                                        </div>
+                                      );
+                                    } catch (error) {
+                                      console.error("Error rendering boolean preview:", error);
+                                      return null;
+                                    }
+                                  })()}
 
                                   {/* Show edit button when not in edit mode */}
                                   {modeVariable.id && !editingVariables[`${modeVariable.id}-${modeVariable.modeId}`] && (

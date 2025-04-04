@@ -4,6 +4,7 @@ import ColorSelector from '../color-selector/ColorSelector';
 import Button from '../../ui/Button';
 import figmaConfig from '../../utils/figmaConfig';
 import figmaApi from '../../utils/figmaApi';
+import { BooleanToggle } from '../shared';
 
 // Import types from the central types file
 import { 
@@ -103,7 +104,7 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
 
       if (selectedNode && selectedNode.type === 'folder') {
         // Generate a current mode identifier based on the three selected collection and variable group level
-        const currentModeIdentifier = `${selectedBrand[0]?.value}-${selectedGrade.value}-${selectedDevice.value}-${selectedThemes[0]?.value}`;
+        const currentModeIdentifier = `${selectedBrand[0]?.value || ''}-${selectedGrade?.value || ''}-${selectedDevice?.value || ''}-${selectedThemes[0]?.value || ''}`;
         
         // Find all matching mode IDs for the current selection
         const matchingModeIds = Object.entries(modeMapping).filter(([, identifier]) => {
@@ -416,9 +417,21 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       return 0;
     }
     
-    // For color variables, handle correctly
-    if (valueType === 'COLOR' && typeof value === 'object') {
-      return value;
+    // For color variables, always normalize to 0-1 range
+    if (valueType === 'COLOR') {
+      return formatColorForFigma(value);
+    }
+    
+    // For BOOLEAN type, ensure it's a proper boolean
+    if (valueType === 'BOOLEAN') {
+      if (typeof value === 'string') {
+        // Convert string representation to actual boolean
+        return value.toLowerCase() === 'true';
+      } else if (typeof value === 'boolean') {
+        return value;
+      }
+      // Default value if parsing fails
+      return false;
     }
     
     // Return value as is for other types
@@ -671,6 +684,24 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
                       valueOnly={false}
                       key={`new-variable-${mode.modeId}`}
                     />
+                  ) : newVariable.valueType === 'BOOLEAN' ? (
+                    <div className="boolean-toggle-wrapper">
+                      <BooleanToggle
+                        value={
+                          // Use mode-specific value if available
+                          typeof newVariableModeValues[mode.modeId] === 'boolean'
+                            ? newVariableModeValues[mode.modeId] as boolean
+                            : typeof newVariableModeValues[mode.modeId] === 'string'
+                            ? (newVariableModeValues[mode.modeId] as string).toLowerCase() === 'true'
+                            : typeof newVariable.rawValue === 'boolean'
+                            ? newVariable.rawValue
+                            : false
+                        }
+                        onChange={(value) => {
+                          handleUpdateNewVariableValue(String(value), mode.modeId);
+                        }}
+                      />
+                    </div>
                   ) : (
                     <input
                       type="text"

@@ -150,3 +150,31 @@ export default tseslint.config({
   },
 })
 ```
+
+## Shared Components
+
+### LoadingMessage
+
+A reusable loading message component that displays a spinner and message:
+
+```jsx
+import { LoadingMessage } from '../../components/shared';
+
+<LoadingMessage 
+  isVisible={isLoading} 
+  message="Loading data..." 
+/>
+```
+
+### ErrorMessage
+
+A reusable error message component:
+
+```jsx
+import { ErrorMessage } from '../../components/shared';
+
+<ErrorMessage 
+  isVisible={!!errorMessage} 
+  message={errorMessage} 
+/>
+```

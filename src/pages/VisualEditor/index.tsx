@@ -1,40 +1,36 @@
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import React, { useState, useEffect, useRef, useContext, forwardRef, useImperativeHandle } from 'react'
 import Select from 'react-select'
 import './styles.scss'
-import figmaApi from '../../utils/figmaApi'
-import figmaConfig from '../../utils/figmaConfig'
-import NeuronLogo from '../../assets/Neuron.svg'
 import TreeView from '../../components/tree-view'
+import { FigmaDataContext } from '../../containers/AppContainer'
+import '../../styles/shared-editor-styles.scss'
+import figmaConfig from '../../utils/figmaConfig'
+import figmaApi from '../../utils/figmaApi'
+
+// Import from the central types file
+import { TreeNode, Variable, RGBAValue, FigmaVariablesData } from './types'
+import { LoadingMessage } from '../../components/shared'
+import VariablesList from '../../components/variables-list/VariablesList'
+import NeuronLogo from '../../assets/Neuron.svg'
 import Button from '../../ui/Button'
 
-// Import our types from the types file
-import { 
-  TreeNode, 
-  Variable, 
-  FigmaVariablesData, 
-  RGBAValue,
-  FigmaVariable,
-} from './types'
-
-// Add the import for formatNonColorValue
+// Import the utilities for processing variables
 import { formatNonColorValue as utilFormatNonColorValue } from './utils/variableUtils'
-import MappingPreview from '../../components/mapping-preview/MappingPreview';
-
-// Import our new components
-import VariablesList from '../../components/variables-list/VariablesList';
-import VariableDetails from '../../components/variable-details/VariableDetails';
-
-// Import shared components
-import { SidebarHeader } from '../../components/shared';
 
 // Define the props interface
-interface VisualEditorProps {
+export interface VisualEditorProps {
   selectedSpace: string;
 }
 
-// Define what we expose via ref
+// Define the ref handle interface
 export interface VisualEditorRefHandle {
   resetApiCallState: () => void;
+}
+
+// Type for the select options
+interface SelectOption {
+  value: string;
+  label: string;
 }
 
 // Define options for selectors
@@ -69,130 +65,11 @@ const projectOptions = [
   { value: 'plankton', label: 'Plankton' }
 ];
 
-// Type for the select options
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-// Define a more complete type for variable references
-interface VariableReference {
-  type: string;
-  id: string;
-}
-
-// Define a type for dropdown options
-interface VariableOption {
-  label: string;
-  value: string;
-  original: Variable | null;
-  isCustom?: boolean;
-  type: string;
-  color?: RGBAValue;
-}
-
-// Helper function to format variable values based on their type
-const formatVariableValue = (
-  value: RGBAValue | string | number | boolean | null | Record<string, unknown>, 
-  resolvedType: string
-) => {
-  // Check if the value is a color (RGBA object)
-  if (resolvedType === 'COLOR' && value && typeof value === 'object' && 'r' in value && 'g' in value && 'b' in value && 'a' in value) {
-    // For color values, format as comma-separated RGB values
-    const rgbaValue = value as RGBAValue;
-    const r = Math.round(rgbaValue.r * 255);
-    const g = Math.round(rgbaValue.g * 255);
-    const b = Math.round(rgbaValue.b * 255);
-    
-    return {
-      displayValue: `${ r }, ${ g }, ${ b }`,
-      type: 'color'
-    };
-  } else {
-    // For non-color values, process with the formatter
-    return utilFormatNonColorValue(value);
-  }
-};
-
-// Helper function to find a variable that matches a given value
-const findVariableByValue = (
-  value: string, 
-  valueType: string, 
-  variables: Variable[]
-): Variable | undefined => {
-  return variables.find(v => 
-    v.valueType === valueType && 
-    v.value === value
-  );
-};
-
-
-// Add utility function to resolve variable reference chains
-const resolveVariableChain = (variableId: string, allVars: Variable[]): Variable | null => {
-  const visitedIds = new Set<string>();
-
-  // Recursive function to traverse the chain
-  const traverse = (id: string): Variable | null => {
-    // Guard against circular references
-    if (visitedIds.has(id)) return null;
-    visitedIds.add(id);
-
-    // Find the variable by ID
-    const variable = allVars.find(v => v.id === id);
-    if (!variable) return null;
-
-    // If this is not an alias, we're at the end of the chain
-    if (variable.valueType !== 'VARIABLE_ALIAS' || !variable.referencedVariable?.id) {
-      return variable;
-    }
-
-    // Follow the reference to the next variable
-    const nextVariable = traverse(variable.referencedVariable.id);
-    return nextVariable || variable; // If can't resolve further, return the current variable
-  };
-
-  return traverse(variableId);
-};
-
-// Add the debug component
-const SpaceDebugInfo = ({ selectedSpace }: { selectedSpace: string }) => {
-  const [showDebug, setShowDebug] = useState(false);
-  // Get the debug info for the current configuration
-  const debugInfo = figmaConfig.debugEnvironmentVariables();
-  
-  return (
-    <div className="space-debug-info">
-      <button 
-        className="debug-toggle"
-        onClick={() => setShowDebug(!showDebug)}
-      >
-        {showDebug ? 'Hide Debug Info' : `Show Debug Info (${selectedSpace})`}
-      </button>
-      
-      {showDebug && (
-        <div className="debug-container">
-          <h3>Space Configuration Debug: {selectedSpace}</h3>
-          <table className="debug-table">
-            <tbody>
-              {Object.entries(debugInfo).map(([key, value]) => (
-                <tr key={key}>
-                  <td className="debug-key">{key}</td>
-                  <td className="debug-value">{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-};
-
 // Convert to forwardRef component
 const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ selectedSpace }, ref) => {
-  // figmaData is used in processVariableData and indirectly in UI rendering
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [figmaData, setFigmaData] = useState<FigmaVariablesData | null>(null);
+  // Get Figma data from context
+  const { figmaData, isLoading: figmaContextLoading, loadingMessage: figmaContextLoadingMessage, errorMessage: figmaContextErrorMessage, pullVariables } = useContext(FigmaDataContext);
+  
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [variables, setVariables] = useState<Variable[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
@@ -212,23 +89,28 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
   const [modeMapping, setModeMapping] = useState<{ [modeId: string]: string }>({});
   // New state for tracking selected modes to display in the table
   const [selectedModes, setSelectedModes] = useState<Array<{ modeId: string, name: string }>>([]);
-  // State to track all available modes for the current collection
+  // State for all available modes for the current collection
   const [availableModes, setAvailableModes] = useState<Array<{ modeId: string, name: string }>>([]);
 
+  // Local loading states for component-specific operations
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
   const [figmaApiKey, setFigmaApiKey] = useState<string>('');
-  // Add a new state for tracking mode-specific values
-  // Add these new state variables after the other state declarations (around line 570)
-
-  // Use a ref to keep track of the latest variable values for saving
-  const latestVariableValues = useRef<Record<string, Variable>>({});
+  
+  // Combine loading and error states from context and local component
+  const combinedIsLoading = isLoading || figmaContextLoading;
+  const combinedLoadingMessage = loadingMessage || figmaContextLoadingMessage;
+  const combinedErrorMessage = errorMessage || figmaContextErrorMessage;
 
   // Add a ref to track first load
   const hasInitializedRef = useRef(false);
   // Add a ref to track initial API call during a session
   const initialApiCallMadeRef = useRef(false);
+
+  // Use a ref to keep track of the latest variable values for saving
+  const latestVariableValues = useRef<Record<string, Variable>>({});
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -252,291 +134,24 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       setFigmaApiKey('');
       console.error(`No Figma token available for space: ${selectedSpace}`);
     }
-    
-    // Reset API call tracking when space changes
-    initialApiCallMadeRef.current = false;
   }, [selectedSpace]); // Re-run when space changes
 
-  // Load Figma variable data when space changes
+  // Process Figma data when it changes
   useEffect(() => {
-    // Only check for duplicate initializations if this is the first mount
-    // Without any specific space change
-    const isInitialMount = !hasInitializedRef.current;
+    if (!figmaData) return;
     
-    // Skip processing in these cases:
-    // 1. If this is not the initial mount AND we already made an API call for this space
-    // 2. If the selected space in props doesn't match what's in localStorage 
-    //    (means App is still updating and will trigger this effect again)
-    if ((!isInitialMount && initialApiCallMadeRef.current) || 
-        (selectedSpace !== figmaConfig.getSelectedSpace())) {
-      console.log('Skipping duplicate API call - waiting for space to fully update');
-      return;
+    console.log('Processing Figma data from context');
+    
+    // Process the data to create tree structure and variables
+    const processedData = processVariableData(figmaData);
+    
+    // Find initial node to select
+    if (treeData.length > 0) {
+      const firstCollection = treeData[0];
+      console.log('Auto-selecting first collection:', firstCollection.name);
+      setSelectedNodeId(firstCollection.id);
     }
-    
-    // Mark that we're processing this space to prevent duplicate calls
-    initialApiCallMadeRef.current = true;
-    console.log(`Making API call for space: ${selectedSpace} (isInitialMount: ${isInitialMount})`);
-
-    // Log whether this is first load or space change
-    if (hasInitializedRef.current) {
-      console.log(`Reloading data due to space change: ${selectedSpace}`);
-    } else {
-      console.log('First initialization of Figma data');
-      hasInitializedRef.current = true;
-    }
-
-    // Auto-sync with Figma on first load or when space changes, using the stored file IDs
-    const fileId = figmaConfig.getStoredFigmaFileId();
-    const themeFileId = figmaConfig.getStoredThemeFigmaFileId();
-    const allColorsFileId = figmaConfig.getStoredAllColorsFigmaFileId();
-    
-    // Exit early if no file ID is configured - prevent unnecessary API calls
-    if (!fileId) {
-      console.log('No Figma file ID configured. Skipping auto-sync.');
-      return;
-    }
-    
-    // Show loading state
-    setIsLoading(true);
-    setLoadingMessage('Syncing with Figma...');
-    setErrorMessage(null);
-    
-    // Create an array to store all variables from different files
-    let allCombinedVariables: Variable[] = [];
-    
-    // Create a ref to store theme variables specifically for reference resolution
-    const themeVariablesRef: Record<string, Variable> = {};
-    
-    // Track the number of completed requests
-    let completedRequests = 0;
-    const totalRequests = 1 + (themeFileId ? 1 : 0) + (allColorsFileId ? 1 : 0);
-
-    // Helper function to track progress and finish loading when all requests are done
-    const trackProgress = (source: string) => {
-      completedRequests++;
-      console.log(`Completed ${completedRequests}/${totalRequests} requests. Source: ${source}`);
-      
-      if (completedRequests === totalRequests) {
-        setLoadingMessage('Successfully synced all variables from Figma!');
-        
-        // Now that we have all variables, process the brand and theme options from the theme file
-        processThemeOptions();
-        
-        // Auto-clear success message after 3 seconds
-        setTimeout(() => {
-          setLoadingMessage('');
-          setIsLoading(false);
-          
-          // After loading is complete, automatically select the first collection in the tree
-          setTimeout(() => {
-            // This timeout gives React time to update the DOM with the new tree data
-            if (treeData.length > 0) {
-              const firstCollection = treeData[0];
-              console.log('Auto-selecting first collection:', firstCollection.name);
-              setSelectedNodeId(firstCollection.id);
-            }
-          }, 100);
-        }, 3000);
-      }
-    };
-    
-    // Process the theme options based on theme file variables
-    const processThemeOptions = () => {
-      console.log('Processing theme file modes for selector options');
-      
-      // Find theme variables and collections with mode information
-      const themeFileVariables = allVariables.filter(v => v.source === 'Theme');
-      
-      if (themeFileVariables.length === 0 || !figmaData) {
-        console.log('No theme file variables or data found for processing options');
-        return;
-      }
-      
-      console.log('Processing theme collections for mode information');
-      
-      // Extract brand and theme options from non-hidden collections in the theme file
-      const brandSet = new Set<string>();
-      const themeSet = new Set<string>();
-      
-      // Always include Default
-      themeSet.add('Default');
-      brandSet.add('Default');
-      
-      // Get collections from figmaData that aren't hidden
-      if (figmaData.meta?.variableCollections) {
-        // Process each collection's modes
-        for (const [collectionId, collection] of Object.entries(figmaData.meta.variableCollections)) {
-          // Only process collections that aren't hidden from publishing
-          if (!collection.hiddenFromPublishing) {
-            console.log(`Processing modes from collection: ${collection.name}`);
-            
-            // Process each mode in the collection
-            if (collection.modes) {
-              for (const mode of collection.modes) {
-                const modeName = mode.name;
-                console.log(`Processing mode: ${modeName} (ID: ${mode.modeId})`);
-                
-                // Extract brand and theme from mode name
-                if (modeName.includes('(') && modeName.includes(')')) {
-                  // Extract the brand (text before the first parenthesis)
-                  const brandMatch = modeName.match(/^(.*?)\s*\(/);
-                  if (brandMatch && brandMatch[1]) {
-                    const brand = brandMatch[1].trim();
-                    brandSet.add(brand);
-                    console.log(`Extracted brand: ${brand}`);
-                  }
-                  
-                  // Extract the theme (text inside parentheses)
-                  const themeMatch = modeName.match(/\((.*?)\)/);
-                  if (themeMatch && themeMatch[1]) {
-                    const theme = themeMatch[1].trim();
-                    themeSet.add(theme);
-                    console.log(`Extracted theme: ${theme}`);
-                  }
-                } else if (modeName !== 'Default') {
-                  // If no parentheses but not 'Default', treat the whole name as a brand
-                  brandSet.add(modeName);
-                  console.log(`Extracted brand (no theme): ${modeName}`);
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      // Convert sets to arrays for SelectOption format
-      const brandOptions = Array.from(brandSet).map(brand => ({
-        value: brand,
-        label: brand
-      }));
-      
-      const themeOptions = Array.from(themeSet).map(theme => ({
-        value: theme,
-        label: theme
-      }));
-      
-      console.log('Generated brand options:', brandOptions);
-      console.log('Generated theme options:', themeOptions);
-      
-      // Update the brand and theme options in state
-      if (brandOptions.length > 0) {
-        // Update the available options array
-        setAvailableBrandOptions(brandOptions);
-        
-        // Set the first brand as selected by default
-        setSelectedBrand([brandOptions[0]]);
-        
-        console.log('Updated brand options and selected brand:', brandOptions[0]);
-      }
-      
-      if (themeOptions.length > 0) {
-        // Update the available options array
-        setAvailableThemeOptions(themeOptions);
-        
-        // Set the first theme as selected by default
-        setSelectedThemes([themeOptions[0]]);
-        
-        console.log('Updated theme options and selected theme:', themeOptions[0]);
-      }
-    };
-    
-    // Error handler for API calls
-    const handleApiError = (error: any, source: string) => {
-      console.error(`Error syncing with Figma (${source}):`, error);
-      setErrorMessage(`Error syncing with Figma (${source}): ${error.message}. Falling back to local data.`);
-        setIsLoading(false);
-        
-        // Fallback to local JSON if Figma sync fails
-    import('../../json/variable.json')
-      .then((data) => {
-        setFigmaData(data.default);
-        processVariableData(data.default);
-          
-          // After loading the fallback data, select the first collection
-          setTimeout(() => {
-            if (treeData.length > 0) {
-              const firstCollection = treeData[0];
-              console.log('Auto-selecting first collection (fallback):', firstCollection.name);
-              setSelectedNodeId(firstCollection.id);
-            }
-          }, 100);
-      })
-          .catch(localError => console.error('Error loading local variable data:', localError));
-    };
-    
-    // Changed the order: All Colors first, then Theme, then Main Figma file
-    
-    // All Colors Figma file (if provided)
-    if (allColorsFileId) {
-      figmaApi.getLocalVariables(allColorsFileId)
-        .then(data => {
-          console.log('All Colors Figma variables data:', data);
-          // Process all colors variables - starting with this as the base
-          const allColorsVariables = processVariableData(data, true, 'All Colors');
-          allCombinedVariables = [...allColorsVariables];
-          
-          // Update the state with combined variables
-          setAllVariables(allCombinedVariables);
-          setVariables(allCombinedVariables);
-          
-          trackProgress('All Colors Figma File');
-        })
-        .catch(error => {
-          console.error('Error pulling from All Colors Figma:', error);
-          trackProgress('All Colors Figma File (Error)');
-        });
-    }
-    
-    // Theme Figma file (if provided)
-    if (themeFileId) {
-      figmaApi.getLocalVariables(themeFileId)
-        .then(data => {
-          console.log('Theme Figma variables data:', data);
-          // Process theme variables without clearing existing ones
-          const themeVariables = processVariableData(data, false, 'Theme');
-          
-          // Store theme variables in our ref for reference resolution
-          themeVariables.forEach(variable => {
-            if (variable.id) {
-              themeVariablesRef[variable.id] = variable;
-            }
-          });
-          
-          allCombinedVariables = [...allCombinedVariables, ...themeVariables];
-          
-          // Update the state with combined variables
-          setAllVariables(allCombinedVariables);
-          setVariables(allCombinedVariables);
-          
-          trackProgress('Theme Figma File');
-        })
-        .catch(error => {
-          console.error('Error pulling from Theme Figma:', error);
-          trackProgress('Theme Figma File (Error)');
-        });
-    }
-    
-    // Main Figma file - load last
-    figmaApi.getLocalVariables(fileId)
-      .then(data => {
-        console.log('Main Figma variables data:', data);
-        setFigmaData(data);
-        // Process without clearing if we had previous data
-        const mainVariables = processVariableData(data, !allColorsFileId, 'Main', themeVariablesRef);
-        allCombinedVariables = [...allCombinedVariables, ...mainVariables];
-        
-        // Update the state with combined variables so far
-        setAllVariables(allCombinedVariables);
-        setVariables(allCombinedVariables);
-        
-        trackProgress('Main Figma File');
-      })
-      .catch(error => {
-        console.error('Error pulling from Main Figma:', error);
-        setErrorMessage(`Error pulling from Main Figma: ${error.message}`);
-        setIsLoading(false);
-      });
-  }, [selectedSpace]); // Re-run when space changes
+  }, [figmaData]);
 
   // Filter variables when selections change
   useEffect(() => {
@@ -591,8 +206,8 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     // If no data, return an empty array
     if (!data || !data.meta) return [];
     
-    // Set the Figma data for reference
-    setFigmaData(data);
+    // Figma data is now provided by context, so no need to set it here
+    // setFigmaData(data);
     
     // Map to store variable mode IDs to mode values/names
     const modeNames: Record<string, { id: string, name: string }> = {};
@@ -1424,117 +1039,11 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     }
   };
 
-  // Handle Figma operations
+  // We no longer need handlePullFromFigma as it's replaced by pullVariables from context
+  // Replace existing handlePullFromFigma with this stub that calls the context function
   const handlePullFromFigma = () => {
-    // Get the stored Figma file IDs based on the current space
-    const fileId = figmaConfig.getStoredFigmaFileId();
-    const themeFileId = figmaConfig.getStoredThemeFigmaFileId();
-    const allColorsFileId = figmaConfig.getStoredAllColorsFigmaFileId();
-    
-    // If no stored file ID, prompt for one with the default value (only allowed in Test space)
-    if (!fileId && figmaConfig.isManualFileIdAllowed()) {
-      const promptedFileId = prompt('Enter Figma File ID:', figmaConfig.DEFAULT_FIGMA_FILE_ID);
-      if (!promptedFileId) return;
-      
-      figmaConfig.storeFigmaFileId(promptedFileId);
-    } else if (!fileId) {
-      // If we're in a space that doesn't allow manual input and we still don't have a fileId,
-      // display an error and return
-      setErrorMessage("No Figma file ID configured for this space. Please check your environment variables.");
-      return;
-    }
-    
-    // Show loading state
-    setIsLoading(true);
-    setLoadingMessage('Pulling data from Figma...');
-    setErrorMessage(null);
-    
-    // Create an array to store all variables from different files
-    let allCombinedVariables: Variable[] = [];
-    
-    // Track the number of completed requests
-    let completedRequests = 0;
-    const totalRequests = 1 + (themeFileId ? 1 : 0) + (allColorsFileId ? 1 : 0);
-
-    // Helper function to track progress and finish loading when all requests are done
-    const trackProgress = (source: string) => {
-      completedRequests++;
-      console.log(`Completed ${completedRequests}/${totalRequests} requests. Source: ${source}`);
-      
-      if (completedRequests === totalRequests) {
-        setLoadingMessage('Successfully pulled all variables from Figma!');
-        // Auto-clear success message after 3 seconds
-        setTimeout(() => {
-          setLoadingMessage('');
-          setIsLoading(false);
-        }, 3000);
-      }
-    };
-    
-    // Changed the order: All Colors first, then Theme, then Main Figma file
-    
-    // All Colors Figma file (if provided)
-    if (allColorsFileId) {
-      figmaApi.getLocalVariables(allColorsFileId)
-        .then(data => {
-          console.log('All Colors Figma variables data:', data);
-          // Process all colors variables - starting with this as the base
-          const allColorsVariables = processVariableData(data, true, 'All Colors');
-          allCombinedVariables = [...allColorsVariables];
-          
-          // Update the state with combined variables
-          setAllVariables(allCombinedVariables);
-          setVariables(allCombinedVariables);
-          
-          trackProgress('All Colors Figma File');
-      })
-      .catch(error => {
-          console.error('Error pulling from All Colors Figma:', error);
-          trackProgress('All Colors Figma File (Error)');
-        });
-    }
-    
-    // Theme Figma file (if provided)
-    if (themeFileId) {
-      figmaApi.getLocalVariables(themeFileId)
-        .then(data => {
-          console.log('Theme Figma variables data:', data);
-          // Process theme variables without clearing existing ones
-          const themeVariables = processVariableData(data, false, 'Theme');
-          allCombinedVariables = [...allCombinedVariables, ...themeVariables];
-          
-          // Update the state with combined variables
-          setAllVariables(allCombinedVariables);
-          setVariables(allCombinedVariables);
-          
-          trackProgress('Theme Figma File');
-        })
-        .catch(error => {
-          console.error('Error pulling from Theme Figma:', error);
-          trackProgress('Theme Figma File (Error)');
-        });
-    }
-    
-    // Main Figma file - load last
-    figmaApi.getLocalVariables(fileId)
-      .then(data => {
-        console.log('Main Figma variables data:', data);
-        setFigmaData(data);
-        // Process without clearing if we had previous data
-        const mainVariables = processVariableData(data, !allColorsFileId, 'Main');
-        allCombinedVariables = [...allCombinedVariables, ...mainVariables];
-        
-        // Update the state with combined variables so far
-        setAllVariables(allCombinedVariables);
-        setVariables(allCombinedVariables);
-        
-        trackProgress('Main Figma File');
-      })
-      .catch(error => {
-        console.error('Error pulling from Main Figma:', error);
-        setErrorMessage(`Error pulling from Main Figma: ${error.message}`);
-        setIsLoading(false);
-      });
+    // Use the pullVariables function from the FigmaDataContext
+    pullVariables();
   };
 
   // Toggle folder expansion
@@ -1699,20 +1208,16 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     if (value && typeof value === 'object' && 'r' in value && 'g' in value && 'b' in value) {
       const rgba = value as RGBAValue;
       
-      // Check if values are already in 0-1 range or need normalization
-      // Handle the special case where the values are exactly at 255, 0, etc.
-      const isAlreadyNormalized = rgba.r <= 1 && rgba.g <= 1 && rgba.b <= 1 && 
-                                 !(rgba.r === 0 && rgba.g === 0 && rgba.b === 0) && // Not likely exactly (0,0,0)
-                                 !(rgba.r === 1 && rgba.g === 1 && rgba.b === 1);   // Not likely exactly (1,1,1)
-      
-      // Always normalize to 0-1 range for Figma API
+      // ALWAYS normalize RGB values to 0-1 range for Figma API, regardless of their current state
+      // This ensures consistent behavior with Figma's expected format
       const result = {
-        r: isAlreadyNormalized ? rgba.r : rgba.r / 255,
-        g: isAlreadyNormalized ? rgba.g : rgba.g / 255,
-        b: isAlreadyNormalized ? rgba.b : rgba.b / 255,
+        r: rgba.r > 1 ? rgba.r / 255 : rgba.r,
+        g: rgba.g > 1 ? rgba.g / 255 : rgba.g,
+        b: rgba.b > 1 ? rgba.b / 255 : rgba.b,
         a: rgba.a || 1
       };
       
+      console.log('[DEBUG] Normalized color to 0-1 range for Figma:', result);
       return result;
     }
 
@@ -1737,9 +1242,21 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       return 0;
     }
     
-    // For color variables, handle correctly
-    if (valueType === 'COLOR' && typeof value === 'object') {
-      return value;
+    // For color variables, always normalize to 0-1 range for Figma API
+    if (valueType === 'COLOR') {
+      return formatColorForFigma(value);
+    }
+    
+    // For BOOLEAN type, ensure it's a proper boolean
+    if (valueType === 'BOOLEAN') {
+      if (typeof value === 'string') {
+        // Convert string representation to actual boolean
+        return value.toLowerCase() === 'true';
+      } else if (typeof value === 'boolean') {
+        return value;
+      }
+      // Default value if parsing fails
+      return false;
     }
     
     // Return value as is for other types
@@ -1793,6 +1310,7 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
         console.log(`[DEBUG] Using value from allVariables for ${refKey} as fallback`);
       }
 
+      // Show loading message
       setIsLoading(true);
       setLoadingMessage('Saving variable to Figma...');
 
@@ -1922,37 +1440,24 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       // Also trigger a refresh in allVariables to ensure all views have the latest data
       setAllVariables([...allVariables]);
 
-      setLoadingMessage('Variable saved successfully!');
+      // Set success message and auto-clear
+      setLoadingMessage('Variable saved successfully to Figma!');
       setTimeout(() => {
         setLoadingMessage('');
         setIsLoading(false);
       }, 3000);
     } catch (error) {
-      console.error('Error saving variable:', error);
-
-      // Extract detailed error message if available
-      let errorMessage = 'Unknown error';
+      // Handle error
+      console.error('Error saving variable to Figma:', error);
+      let errorMsg = '';
       if (error instanceof Error) {
-        errorMessage = error.message;
+        errorMsg = error.message;
+      } else {
+        errorMsg = String(error);
       }
-
-      // Check for Axios error with response data
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as {
-          response?: {
-            data?: {
-              message?: string;
-              status?: number;
-            }
-          }
-        };
-
-        if (axiosError.response?.data?.message) {
-          errorMessage = `Figma API Error: ${axiosError.response.data.message}`;
-        }
-      }
-
-      setErrorMessage(`Error saving variable: ${errorMessage}`);
+      setErrorMessage(`Error saving to Figma: ${errorMsg}`);
+      
+      // Clear loading state
       setIsLoading(false);
     }
   };
@@ -2109,18 +1614,25 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     return rootFolders;
   };
 
+  // Update the JSX to use the combined states
   return (
     <div className="app-container">
+      <LoadingMessage 
+        isVisible={combinedIsLoading} 
+        message={combinedLoadingMessage || 'Loading...'}
+      />
+
+      
       <div className="sidebar">
-        <SidebarHeader 
-          logo={NeuronLogo} 
-        />
+        <div className="sidebar-header">
+          <img src={NeuronLogo} alt="Neuron Logo" className="sidebar-logo" />
+        </div>
         <div className="sidebar-content">
           <TreeView 
-            nodes={ treeData }
-            onToggle={ handleToggleNode }
-            onSelect={ handleSelectNode }
-            selectedNodeId={ selectedNodeId }
+            nodes={treeData} 
+            onSelect={handleSelectNode} 
+            onToggle={handleToggleNode}
+            selectedNodeId={selectedNodeId}
           />
         </div>
       </div>
@@ -2131,9 +1643,6 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
             <div className="header-title">Visual Editor</div>
             <div className="figma-file-name">Figma Design System - v2.0</div>
           </div>
-          
-          {/* Add debug component below the header */}
-          <SpaceDebugInfo selectedSpace={selectedSpace} />
         </div>
         
         <div className="main-area">
@@ -2251,15 +1760,10 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                   </>
                 ) : 'Sync'}
               </Button>
-              <MappingPreview allVariables={allVariables}
-                figmaData={figmaData}
-                modeMapping={modeMapping}
-                selectedModes={selectedModes}
-                selectedBrand={selectedBrand}
-                selectedGrade={selectedGrade}
-                selectedDevice={selectedDevice}
-                selectedThemes={selectedThemes}
-              />
+              <div className="mapping-preview-container">
+                <h3>Mapping Preview</h3>
+                <p>Variables mapping preview is currently unavailable.</p>
+              </div>
              </div>
         
             {loadingMessage && (
@@ -2397,14 +1901,91 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
     
                     if (variableData) {
                       return (
-                        <VariableDetails
-                          variableData={variableData}
-                          editingVariables={editingVariables}
-                          setEditingVariables={setEditingVariables}
-                          handleVariableValueChange={handleVariableValueChange}
-                          handleSaveVariable={handleSaveVariable}
-                          allVariables={allVariables}
-                        />
+                        <div className="variable-details-container">
+                          <h3>{variableData.name}</h3>
+                          
+                          <div className="variable-property">
+                            <div className="property-label">Type:</div>
+                            <div className="property-value">
+                              {variableData.valueType === 'VARIABLE_ALIAS' ? 'Reference Variable' : variableData.valueType}
+                            </div>
+                          </div>
+                          
+                          <div className="variable-property">
+                            <div className="property-label">Collection:</div>
+                            <div className="property-value">{variableData.collectionName}</div>
+                          </div>
+                          
+                          {variableData.valueType === 'VARIABLE_ALIAS' && variableData.referencedVariable && (
+                            <div className="variable-property">
+                              <div className="property-label">References:</div>
+                              <div className="property-value">
+                                <div className="reference-badge">
+                                  {variableData.isColor && (
+                                    <div 
+                                      className="color-preview" 
+                                      style={{ 
+                                        backgroundColor: variableData.rawValue && typeof variableData.rawValue === 'object' && 'r' in variableData.rawValue ? 
+                                          `rgba(${Math.round((variableData.rawValue as RGBAValue).r * 255)}, 
+                                                ${Math.round((variableData.rawValue as RGBAValue).g * 255)}, 
+                                                ${Math.round((variableData.rawValue as RGBAValue).b * 255)}, 
+                                                ${(variableData.rawValue as RGBAValue).a})` : 
+                                          'transparent' 
+                                      }} 
+                                    />
+                                  )}
+                                  {variableData.referencedVariable.name} ({variableData.referencedVariable.collection})
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="variable-value-display">
+                            {variableData.isColor && 
+                             variableData.rawValue && 
+                             typeof variableData.rawValue === 'object' && 
+                             'r' in variableData.rawValue ? (
+                              <div className="color-value-container">
+                                <div 
+                                  className="color-preview-large" 
+                                  style={{ 
+                                    backgroundColor: `rgba(${Math.round((variableData.rawValue as RGBAValue).r * 255)}, 
+                                                           ${Math.round((variableData.rawValue as RGBAValue).g * 255)}, 
+                                                           ${Math.round((variableData.rawValue as RGBAValue).b * 255)}, 
+                                                           ${(variableData.rawValue as RGBAValue).a})` 
+                                  }} 
+                                />
+                                <div className="color-value">
+                                  rgba({Math.round((variableData.rawValue as RGBAValue).r * 255)}, 
+                                       {Math.round((variableData.rawValue as RGBAValue).g * 255)}, 
+                                       {Math.round((variableData.rawValue as RGBAValue).b * 255)}, 
+                                       {(variableData.rawValue as RGBAValue).a})
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="variable-value">
+                                {typeof variableData.rawValue === 'object' 
+                                  ? JSON.stringify(variableData.rawValue) 
+                                  : String(variableData.rawValue)}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="variable-actions">
+                            <Button 
+                              variant="primary"
+                              onClick={() => handleSelectNode(selectedNode.id.split('-')[0])}
+                            >
+                              Back to Collection
+                            </Button>
+                            <Button 
+                              variant="secondary"
+                              onClick={() => handleCancelVariableChanges(variableData)}
+                            >
+                              Cancel Changes
+                            </Button>
+                          </div>
+                        </div>
                       );
                     }
                   }

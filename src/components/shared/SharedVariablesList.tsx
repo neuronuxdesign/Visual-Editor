@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import VariablesList from '../variables-list/VariablesList';
 import { Variable, RGBAValue, TreeNode as VisualTreeNode, SelectOption, FigmaVariablesData } from '../../pages/VisualEditor/types';
 import { CustomVariable, TreeNode as CustomTreeNode } from '../../pages/CustomVariableEditor/types';
 
-// Union type for TreeNode to work with both editors
-type TreeNodeUnion = VisualTreeNode | Omit<CustomTreeNode, 'type'> & { type: 'folder' | 'file' };
+// Define a union type to handle both TreeNode types
+type TreeNodeUnion = 
+  | (Omit<VisualTreeNode, 'type'> & { type: 'folder' | 'file' | 'variable' })
+  | (Omit<CustomTreeNode, 'type'> & { type: 'folder' | 'file' | 'variable' });
 
 interface SharedVariablesListProps {
   // Common props
-  selectedNode: TreeNodeUnion;
+  selectedNode: TreeNodeUnion | null;
   treeData: TreeNodeUnion[];
   variables: Variable[] | CustomVariable[];
   allVariables: Variable[] | CustomVariable[];
@@ -36,6 +38,8 @@ interface SharedVariablesListProps {
   selectedDevice?: SelectOption | null;
   selectedThemes?: SelectOption[] | SelectOption | null;
   modeMapping?: { [modeId: string]: string };
+  getAvailableModes?: () => string[];
+  onNodeClick?: (node: TreeNodeUnion) => void;
 }
 
 /**
@@ -69,7 +73,9 @@ const SharedVariablesList: React.FC<SharedVariablesListProps> = ({
   selectedGrade = null,
   selectedDevice = null,
   selectedThemes = [],
-  modeMapping = {}
+  modeMapping = {},
+  getAvailableModes,
+  onNodeClick
 }) => {
   
   // Convert CustomVariables to Variables if needed
@@ -179,11 +185,65 @@ const SharedVariablesList: React.FC<SharedVariablesListProps> = ({
   const visualSelectedNode = convertToVisualTreeNode(selectedNode);
   const visualTreeData = treeData.map(convertToVisualTreeNode);
 
+  // Convert CustomVariable to Variable for VariablesList component
+  const convertCustomToVariable = (customVar: CustomVariable): Variable => {
+    return {
+      id: customVar.id,
+      name: customVar.name,
+      valueType: customVar.valueType,
+      value: customVar.value,
+      key: customVar.id,
+      resolvedType: customVar.valueType,
+      description: '',
+      remote: false,
+      documentationLinks: [],
+      hiddenFromPublishing: false,
+      scopes: [],
+      variableCollectionId: customVar.collectionId || '',
+      variableModeId: customVar.modeId || '',
+    };
+  };
+
+  // Wrapper function for onVariableValueChange to handle different variable types
+  const handleVariableValueChangeLocal = (variableId: string, value: string | number | Record<string, unknown>, modeId?: string) => {
+    if (onNodeClick) {
+      const node = treeData.find(n => n.type === 'variable' && n.id === variableId) as TreeNodeUnion;
+      if (node) {
+        onNodeClick(node);
+      }
+    }
+  };
+
+  // Wrapper function for onSaveVariable
+  const handleSaveVariableLocal = async (variable: Variable) => {
+    if (onNodeClick) {
+      const node = treeData.find(n => n.type === 'variable' && n.id === variable.id) as TreeNodeUnion;
+      if (node) {
+        await handleSaveVariableWrapper(variable);
+      }
+    }
+  };
+
+  // Wrapper function for onCancelEdit
+  const handleCancelEditLocal = () => {
+    if (onNodeClick) {
+      const node = treeData.find(n => n.type === 'variable') as TreeNodeUnion;
+      if (node) {
+        handleCancelVariableChangesWrapper(node);
+      }
+    }
+  };
+
   return (
     <VariablesList
       selectedNode={visualSelectedNode}
       treeData={visualTreeData}
-      variables={convertedVariables}
+      variables={
+        // If we have custom variables, convert them to Variable type
+        variables
+          ? variables.map(convertCustomToVariable)
+          : allVariables || []
+      }
       allVariables={convertedAllVariables}
       selectedNodeId={selectedNodeId}
       selectedBrand={selectedBrand as SelectOption[]}
@@ -201,11 +261,13 @@ const SharedVariablesList: React.FC<SharedVariablesListProps> = ({
       setIsLoading={setIsLoading}
       setLoadingMessage={setLoadingMessage}
       setErrorMessage={setErrorMessage}
-      handleVariableValueChange={handleVariableValueChangeWrapper}
-      handleSaveVariable={handleSaveVariableWrapper}
-      handleCancelVariableChanges={handleCancelVariableChangesWrapper}
+      handleVariableValueChange={handleVariableValueChangeLocal}
+      handleSaveVariable={handleSaveVariableLocal}
+      handleCancelVariableChanges={handleCancelEditLocal}
       handleSelectNode={handleSelectNode}
       processVariableData={processVariableData}
+      getAvailableModes={getAvailableModes}
+      onNodeClick={onNodeClick}
     />
   );
 };
