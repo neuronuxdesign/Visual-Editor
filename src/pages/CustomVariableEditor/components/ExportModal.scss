@@ -1,0 +1,127 @@
+.export-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.export-modal-container {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  width: 80%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.export-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .close-button {
+    background: none;
+    border: none;
+    font-size: 20px;
+    font-weight: bold;
+    color: #999;
+    cursor: pointer;
+    
+    &:hover {
+      color: #666;
+    }
+  }
+}
+
+.export-modal-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  
+  .loading-indicator {
+    padding: 32px;
+    text-align: center;
+    color: #666;
+    font-size: 16px;
+  }
+  
+  .export-preview {
+    flex: 1;
+    overflow: auto;
+    max-height: calc(80vh - 160px);
+    
+    pre {
+      margin: 0;
+      padding: 16px 24px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #333;
+      white-space: pre-wrap;
+      word-break: break-all;
+      
+      /* Syntax highlighting for JSON */
+      .string { color: #080; }
+      .number { color: #008; }
+      .boolean { color: #008; }
+      .null { color: #808; }
+      .key { color: #606; }
+    }
+  }
+  
+  .export-modal-actions {
+    padding: 16px 24px;
+    border-top: 1px solid #e8e8e8;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    
+    button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      
+      &.download-button {
+        background-color: #0066cc;
+        color: white;
+        border: none;
+        
+        &:hover {
+          background-color: #0052a3;
+        }
+      }
+      
+      &.close-button-secondary {
+        background-color: white;
+        color: #333;
+        border: 1px solid #ddd;
+        
+        &:hover {
+          background-color: #f5f5f5;
+        }
+      }
+    }
+  }
+} 

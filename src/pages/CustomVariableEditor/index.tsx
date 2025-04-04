@@ -9,6 +9,7 @@ import TreeView from './components/TreeView';
 import ModeManager from './components/ModeManager';
 import ColorSelector from './components/ColorSelector';
 import VariableCreator from './components/VariableCreator';
+import ExportModal from './components/ExportModal';
 
 // Brand and theme options
 const BRANDS = [
@@ -51,6 +52,39 @@ const CustomVariableEditor: React.FC = () => {
   const [showModeManager, setShowModeManager] = useState<boolean>(false);
   const [showVariableCreator, setShowVariableCreator] = useState<boolean>(false);
   
+  // Add new state variables for the export modal
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [exportType, setExportType] = useState<'css' | 'mui'>('css');
+  
+  // Helper functions for common operations
+  // Save changes to localStorage and update UI
+  const saveChangesAndRefresh = (nodeId?: string) => {
+    // Save to localStorage
+    MasterJSON.saveMasterData();
+    
+    // Refresh the tree
+    const updatedTree = MasterJSON.convertToTreeStructure();
+    setTreeData(updatedTree);
+    
+    // Refresh the variables if a node is selected
+    if (nodeId) {
+      const nodeVariables = MasterJSON.getVariablesForNode(nodeId);
+      setVariables(nodeVariables);
+    }
+  };
+  
+  // Get the actual collection ID from a node ID (handles folder nodes)
+  const getCollectionIdFromNodeId = (nodeId: string): string => {
+    return nodeId.includes('-') ? nodeId.split('-')[0] : nodeId;
+  };
+  
+  // Clear the editing state
+  const clearEditingState = () => {
+    setEditingVariableId(null);
+    setEditingModeId(null);
+    setEditingValue('');
+  };
+  
   // Initialize MasterJSON data on component mount
   useEffect(() => {
     setIsLoading(true);
@@ -81,29 +115,31 @@ const CustomVariableEditor: React.FC = () => {
       setAvailableModes(collectionModes);
       
       // Get variables for this collection
-      const collectionVariables = MasterJSON.getVariablesForCollection(firstCollectionId);
-      setVariables(collectionVariables);
+      const nodeVariables = MasterJSON.getVariablesForNode(firstCollectionId);
+      setVariables(nodeVariables);
     }
     
     setIsLoading(false);
   }, []);
   
   // Handle collection selection
-  const handleCollectionSelect = (collectionId: string) => {
-    setSelectedCollection(collectionId);
-    console.log('Selected collection:', collectionId);
+  const handleCollectionSelect = (nodeId: string) => {
+    setSelectedCollection(nodeId);
+    console.log('Selected node:', nodeId);
     
-    // Get modes for this collection
+    // Extract collection ID from node ID if it's a folder node
+    const collectionId = getCollectionIdFromNodeId(nodeId);
+    
+    // Get modes for the collection
     const collectionModes = MasterJSON.getCollectionModes(collectionId);
     setAvailableModes(collectionModes);
     
-    // Get variables for this collection
-    const collectionVariables = MasterJSON.getVariablesForCollection(collectionId);
-    setVariables(collectionVariables);
+    // Get variables for this node (includes all variables in subfolders)
+    const nodeVariables = MasterJSON.getVariablesForNode(nodeId);
+    setVariables(nodeVariables);
     
     // Clear editing state
-    setEditingVariableId(null);
-    setEditingModeId(null);
+    clearEditingState();
   };
   
   // Handle brand selection
@@ -167,12 +203,8 @@ const CustomVariableEditor: React.FC = () => {
     // Add the collection to MasterJSON
     const collectionId = MasterJSON.addCollection(name);
     
-    // Save to localStorage
-    MasterJSON.saveMasterData();
-    
-    // Refresh the tree
-    const updatedTree = MasterJSON.convertToTreeStructure();
-    setTreeData(updatedTree);
+    // Save changes and refresh UI
+    saveChangesAndRefresh(collectionId);
     
     // Select the new collection
     setSelectedCollection(collectionId);
@@ -201,18 +233,8 @@ const CustomVariableEditor: React.FC = () => {
       MasterJSON.updateVariable(nodeId, { name: newName });
     }
     
-    // Save to localStorage
-    MasterJSON.saveMasterData();
-    
-    // Refresh the tree
-    const updatedTree = MasterJSON.convertToTreeStructure();
-    setTreeData(updatedTree);
-    
-    // Refresh the variables list if needed
-    if (selectedCollection) {
-      const collectionVariables = MasterJSON.getVariablesForCollection(selectedCollection);
-      setVariables(collectionVariables);
-    }
+    // Save changes and refresh UI
+    saveChangesAndRefresh(selectedCollection || undefined);
   };
   
   // Handle deleting a node
@@ -233,54 +255,32 @@ const CustomVariableEditor: React.FC = () => {
       MasterJSON.deleteVariable(nodeId);
     }
     
-    // Save to localStorage
-    MasterJSON.saveMasterData();
-    
-    // Refresh the tree
-    const updatedTree = MasterJSON.convertToTreeStructure();
-    setTreeData(updatedTree);
-    
-    // Refresh the variables list if needed
-    if (selectedCollection && selectedCollection !== nodeId) {
-      const collectionVariables = MasterJSON.getVariablesForCollection(selectedCollection);
-      setVariables(collectionVariables);
-    }
+    // Save changes and refresh UI
+    saveChangesAndRefresh(selectedCollection !== nodeId ? selectedCollection || undefined : undefined);
   };
   
   // Get the visible modes based on selected brands and themes
   const getVisibleModes = () => {
     if (availableModes.length === 0) return [];
     
-    console.log('Available modes:', availableModes);
-    console.log('Selected brands:', selectedBrands);
-    console.log('Selected themes:', selectedThemes);
-    
     // Filter modes that match both selected brands AND selected themes
     const filteredModes = availableModes.filter(mode => {
       const modeName = mode.name.toLowerCase();
-      console.log('Checking mode:', modeName);
       
       // Check if this mode matches any selected brand
-      const matchesBrand = selectedBrands.some(brand => {
-        const matches = modeName.includes(brand.toLowerCase());
-        console.log(`  - Brand ${brand} matches: ${matches}`);
-        return matches;
-      });
+      const matchesBrand = selectedBrands.some(brand => 
+        modeName.includes(brand.toLowerCase())
+      );
       
       // Check if this mode matches any selected theme
-      const matchesTheme = selectedThemes.some(theme => {
-        const matches = modeName.includes(theme.toLowerCase());
-        console.log(`  - Theme ${theme} matches: ${matches}`);
-        return matches;
-      });
+      const matchesTheme = selectedThemes.some(theme => 
+        modeName.includes(theme.toLowerCase())
+      );
       
       // Both conditions must be true
-      const shouldShow = matchesBrand && matchesTheme;
-      console.log(`  - Should show: ${shouldShow}`);
-      return shouldShow;
+      return matchesBrand && matchesTheme;
     });
     
-    console.log('Filtered modes:', filteredModes);
     return filteredModes;
   };
   
@@ -351,26 +351,16 @@ const CustomVariableEditor: React.FC = () => {
       modeId: modeId
     });
     
-    // Save to localStorage
-    MasterJSON.saveMasterData();
-    
-    // Refresh the variables list
-    if (selectedCollection) {
-      const collectionVariables = MasterJSON.getVariablesForCollection(selectedCollection);
-      setVariables(collectionVariables);
-    }
+    // Save changes and refresh variables
+    saveChangesAndRefresh(selectedCollection || undefined);
     
     // Clear editing state
-    setEditingVariableId(null);
-    setEditingModeId(null);
-    setEditingValue('');
+    clearEditingState();
   };
   
   // Handle canceling edit
   const handleCancelEdit = () => {
-    setEditingVariableId(null);
-    setEditingModeId(null);
-    setEditingValue('');
+    clearEditingState();
   };
   
   // Render color preview
@@ -404,16 +394,19 @@ const CustomVariableEditor: React.FC = () => {
   const visibleModes = getVisibleModes();
   const uniqueVariableNames = getUniqueVariableNames();
 
-  // Add these handler functions for managing modes
+  // Handler functions for managing modes
   const handleAddMode = (name: string) => {
     if (!selectedCollection) return;
     
+    // Extract collection ID if it's a folder node
+    const collectionId = getCollectionIdFromNodeId(selectedCollection);
+    
     // Add mode to the collection
-    const modeId = MasterJSON.addMode(selectedCollection, name);
+    const modeId = MasterJSON.addMode(collectionId, name);
     
     if (modeId) {
       // Update availableModes
-      const collectionModes = MasterJSON.getCollectionModes(selectedCollection);
+      const collectionModes = MasterJSON.getCollectionModes(collectionId);
       setAvailableModes(collectionModes);
       
       // Save changes
@@ -424,6 +417,9 @@ const CustomVariableEditor: React.FC = () => {
   const handleEditMode = (modeId: string, newName: string) => {
     if (!selectedCollection) return;
     
+    // Extract collection ID if it's a folder node
+    const collectionId = getCollectionIdFromNodeId(selectedCollection);
+    
     // Find the mode and update it
     const updatedModes = availableModes.map(mode => {
       if (mode.modeId === modeId) {
@@ -433,7 +429,7 @@ const CustomVariableEditor: React.FC = () => {
     });
     
     // Update the collection in MasterJSON
-    const collection = MasterJSON.getMasterData().collections.find(c => c.id === selectedCollection);
+    const collection = MasterJSON.getMasterData().collections.find(c => c.id === collectionId);
     if (collection) {
       collection.modes = updatedModes;
       MasterJSON.saveMasterData();
@@ -446,20 +442,17 @@ const CustomVariableEditor: React.FC = () => {
   const handleDeleteMode = (modeId: string) => {
     if (!selectedCollection) return;
     
+    // Extract collection ID if it's a folder node
+    const collectionId = getCollectionIdFromNodeId(selectedCollection);
+    
     // Delete the mode
-    const success = MasterJSON.deleteMode(selectedCollection, modeId);
+    const success = MasterJSON.deleteMode(collectionId, modeId);
     
     if (success) {
-      // Update availableModes
-      const collectionModes = MasterJSON.getCollectionModes(selectedCollection);
+      // Save changes and refresh UI
+      const collectionModes = MasterJSON.getCollectionModes(collectionId);
       setAvailableModes(collectionModes);
-      
-      // Update variables to remove deleted mode
-      const updatedVariables = MasterJSON.getVariablesForCollection(selectedCollection);
-      setVariables(updatedVariables);
-      
-      // Save changes
-      MasterJSON.saveMasterData();
+      saveChangesAndRefresh(selectedCollection);
     }
   };
 
@@ -467,15 +460,8 @@ const CustomVariableEditor: React.FC = () => {
   const handleVariableCreated = () => {
     setShowVariableCreator(false);
     
-    // Refresh the tree
-    const updatedTree = MasterJSON.convertToTreeStructure();
-    setTreeData(updatedTree);
-    
-    // Refresh the variables list
-    if (selectedCollection) {
-      const collectionVariables = MasterJSON.getVariablesForCollection(selectedCollection);
-      setVariables(collectionVariables);
-    }
+    // Refresh UI
+    saveChangesAndRefresh(selectedCollection || undefined);
   };
 
   return (
@@ -564,33 +550,54 @@ const CustomVariableEditor: React.FC = () => {
         </div>
         
         <div className="main-area">
+          <div className="main-area-header">
+            <div className="variables-header">
+              <h2>Variables</h2>
+              <button 
+                className="add-variable-btn"
+                onClick={handleCreateVariable}
+              >
+                Add Variable
+              </button>
+            </div>
+            
+            <div className="export-buttons">
+              <button 
+                className="export-btn css-export"
+                onClick={() => {
+                  setExportType('css');
+                  setShowExportModal(true);
+                }}
+              >
+                Export CSS
+              </button>
+              <button 
+                className="export-btn mui-export"
+                onClick={() => {
+                  setExportType('mui');
+                  setShowExportModal(true);
+                }}
+              >
+                Export MUI Theme
+              </button>
+            </div>
+          </div>
+          
           {selectedCollection ? (
             <>
-              <div className="variables-header">
-                <h2>Variables</h2>
-                <button 
-                  className="add-variable-btn"
-                  onClick={handleCreateVariable}
-                >
-                  Add Variable
-                </button>
-              </div>
-              
               {uniqueVariableNames.length > 0 ? (
                 <div className="variables-table multi-mode-table">
                   <div className="variables-row variables-header">
                     <div className="variable-cell variable-info-cell">Variable</div>
-                    {/* Render columns for each visible mode */}
-                    <div className="header-scrollable-area">
-                      {visibleModes.map((mode) => (
-                        <div
-                          key={mode.modeId}
-                          className="variable-cell variable-mode-value-cell"
-                        >
-                          <span>{mode.name}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {/* Mode columns */}
+                    {visibleModes.map(mode => (
+                      <div 
+                        key={mode.modeId} 
+                        className={`variable-cell variable-mode-value-cell ${mode.modeId === visibleModes[0]?.modeId ? 'active-mode' : ''}`}
+                      >
+                        {mode.name}
+                      </div>
+                    ))}
                     <div className="variable-cell variable-actions-cell">Actions</div>
                   </div>
                   
@@ -601,7 +608,7 @@ const CustomVariableEditor: React.FC = () => {
                       
                       return (
                         <div key={varName} className="variables-row">
-                          {/* Variable info cell - same for all modes */}
+                          {/* Variable info cell */}
                           <div className="variable-cell variable-info-cell">
                             <div className="variable-info-content">
                               <div className="variable-name">{varName}</div>
@@ -609,51 +616,73 @@ const CustomVariableEditor: React.FC = () => {
                             </div>
                           </div>
                           
-                          {/* Middle scrollable area with mode cells */}
-                          <div className="row-scrollable-area">
-                            {visibleModes.map(mode => {
-                              const varForMode = findVariableForMode(varsWithName, mode.modeId);
-                              const isEditing = editingVariableId === (varForMode?.id || '') && editingModeId === mode.modeId;
-                              
-                              return (
-                                <div 
-                                  key={mode.modeId} 
-                                  className="variable-cell variable-mode-value-cell"
-                                >
-                                  {isEditing ? (
-                                    <div className="variable-value-editor">
-                                      {firstVar.valueType === 'COLOR' ? (
-                                        <div className="color-editor-container">
-                                          <ColorSelector 
-                                            variable={{
-                                              ...firstVar,
-                                              id: editingVariableId || '',
-                                              modeId: editingModeId || '',
-                                              value: typeof firstVar.value === 'string' 
-                                                ? { r: 0, g: 0, b: 0, a: 1 }
-                                                : firstVar.value
-                                            }}
-                                            allVariables={variables}
-                                            onValueChange={(variable, newValue) => {
-                                              // Update the variable with new color value
-                                              MasterJSON.updateVariable(
-                                                variable.id,
-                                                { value: newValue, modeId: variable.modeId }
-                                              );
-                                              
-                                              // Save to localStorage
-                                              MasterJSON.saveMasterData();
-                                              
-                                              // Refresh the variables
-                                              const updatedVars = MasterJSON.getVariablesForCollection(selectedCollection || '');
-                                              setVariables(updatedVars);
-                                              
-                                              // Clear editing state
-                                              setEditingVariableId(null);
-                                              setEditingModeId(null);
-                                              setEditingValue('');
-                                            }}
-                                          />
+                          {/* Mode value cells */}
+                          {visibleModes.map(mode => {
+                            const varForMode = findVariableForMode(varsWithName, mode.modeId);
+                            const isEditing = editingVariableId === (varForMode?.id || '') && editingModeId === mode.modeId;
+                            
+                            return (
+                              <div 
+                                key={mode.modeId} 
+                                className="variable-cell variable-mode-value-cell"
+                              >
+                                {isEditing ? (
+                                  <div className="variable-value-editor">
+                                    {firstVar.valueType === 'COLOR' ? (
+                                      <div className="color-editor-container">
+                                        <ColorSelector 
+                                          variable={{
+                                            ...firstVar,
+                                            id: editingVariableId || '',
+                                            modeId: editingModeId || '',
+                                            value: typeof firstVar.value === 'string' 
+                                              ? { r: 0, g: 0, b: 0, a: 1 }
+                                              : firstVar.value
+                                          }}
+                                          allVariables={variables}
+                                          onValueChange={(variable, newValue) => {
+                                            // Update the variable with new color value
+                                            MasterJSON.updateVariable(
+                                              variable.id,
+                                              { value: newValue, modeId: variable.modeId }
+                                            );
+                                            
+                                            // Save to localStorage
+                                            MasterJSON.saveMasterData();
+                                            
+                                            // Refresh the variables
+                                            const updatedVars = MasterJSON.getVariablesForNode(selectedCollection || '');
+                                            setVariables(updatedVars);
+                                            
+                                            // Clear editing state
+                                            setEditingVariableId(null);
+                                            setEditingModeId(null);
+                                            setEditingValue('');
+                                          }}
+                                        />
+                                        <button 
+                                          className="action-btn cancel-btn"
+                                          onClick={handleCancelEdit}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <input
+                                          type="text"
+                                          value={editingValue}
+                                          onChange={(e) => setEditingValue(e.target.value)}
+                                          className="value-input"
+                                          autoFocus
+                                        />
+                                        <div className="edit-actions">
+                                          <button 
+                                            className="action-btn save-btn"
+                                            onClick={() => handleSaveValue(editingVariableId || '', editingModeId || '', firstVar.valueType)}
+                                          >
+                                            Save
+                                          </button>
                                           <button 
                                             className="action-btn cancel-btn"
                                             onClick={handleCancelEdit}
@@ -661,99 +690,75 @@ const CustomVariableEditor: React.FC = () => {
                                             Cancel
                                           </button>
                                         </div>
-                                      ) : (
-                                        <>
-                                          <input
-                                            type="text"
-                                            value={editingValue}
-                                            onChange={(e) => setEditingValue(e.target.value)}
-                                            className="value-input"
-                                            autoFocus
-                                          />
-                                          <div className="edit-actions">
-                                            <button 
-                                              className="action-btn save-btn"
-                                              onClick={() => handleSaveValue(editingVariableId || '', editingModeId || '', firstVar.valueType)}
-                                            >
-                                              Save
-                                            </button>
-                                            <button 
-                                              className="action-btn cancel-btn"
-                                              onClick={handleCancelEdit}
-                                            >
-                                              Cancel
-                                            </button>
-                                          </div>
-                                        </>
-                                      )}
-                                    </div>
-                                  ) : varForMode ? (
-                                    <div className="variable-value-display">
-                                      {firstVar.valueType === 'COLOR' && typeof varForMode.value === 'object' ? (
-                                        <div className="color-value">
-                                          {renderColorPreview(varForMode.value as { r: number; g: number; b: number; a: number })}
-                                          <span className="color-code">
-                                            rgba({Math.round((varForMode.value as { r: number }).r * 255)}, 
-                                            {Math.round((varForMode.value as { g: number }).g * 255)}, 
-                                            {Math.round((varForMode.value as { b: number }).b * 255)}, 
-                                            {(varForMode.value as { a: number }).a})
-                                          </span>
-                                        </div>
-                                      ) : firstVar.valueType === 'FLOAT' ? (
-                                        <div className="float-value">
-                                          {Number(varForMode.value).toFixed(2)}
-                                        </div>
-                                      ) : firstVar.valueType === 'BOOLEAN' ? (
-                                        <div className={`boolean-value ${String(varForMode.value).toLowerCase() === 'true' ? 'true' : 'false'}`}>
-                                          {String(varForMode.value).toLowerCase() === 'true' ? 'True' : 'False'}
-                                        </div>
-                                      ) : (
-                                        <div className="string-value">
-                                          {String(varForMode.value)}
-                                        </div>
-                                      )}
-                                      
-                                      <button 
-                                        className="edit-value-btn"
-                                        onClick={() => handleStartEditValue(varForMode.id, mode.modeId, varForMode.value)}
-                                      >
-                                        Edit
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="empty-value">
-                                      <button 
-                                        className="add-value-btn"
-                                        onClick={() => {
-                                          // Create a copy of this variable for this mode
-                                          const newVarId = MasterJSON.addVariable(
-                                            firstVar.name,
-                                            firstVar.valueType,
-                                            firstVar.value,
-                                            selectedCollection || '',
-                                            firstVar.description
-                                          );
+                                      </>
+                                    )}
+                                  </div>
+                                ) : varForMode ? (
+                                  <div className="variable-value-display">
+                                    {firstVar.valueType === 'COLOR' && typeof varForMode.value === 'object' ? (
+                                      <div className="color-value">
+                                        {renderColorPreview(varForMode.value as { r: number; g: number; b: number; a: number })}
+                                        <span className="color-code">
+                                          rgba({Math.round((varForMode.value as { r: number }).r * 255)}, 
+                                          {Math.round((varForMode.value as { g: number }).g * 255)}, 
+                                          {Math.round((varForMode.value as { b: number }).b * 255)}, 
+                                          {(varForMode.value as { a: number }).a})
+                                        </span>
+                                      </div>
+                                    ) : firstVar.valueType === 'FLOAT' ? (
+                                      <div className="float-value">
+                                        {Number(varForMode.value).toFixed(2)}
+                                      </div>
+                                    ) : firstVar.valueType === 'BOOLEAN' ? (
+                                      <div className={`boolean-value ${String(varForMode.value).toLowerCase() === 'true' ? 'true' : 'false'}`}>
+                                        {String(varForMode.value).toLowerCase() === 'true' ? 'True' : 'False'}
+                                      </div>
+                                    ) : (
+                                      <div className="string-value">
+                                        {String(varForMode.value)}
+                                      </div>
+                                    )}
+                                    
+                                    <button 
+                                      className="edit-value-btn"
+                                      onClick={() => handleStartEditValue(varForMode.id, mode.modeId, varForMode.value)}
+                                    >
+                                      Edit
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="empty-value">
+                                    <button 
+                                      className="add-value-btn"
+                                      onClick={() => {
+                                        // Create a copy of this variable for this mode
+                                        const newVarId = MasterJSON.addVariable(
+                                          firstVar.name,
+                                          firstVar.valueType,
+                                          firstVar.value,
+                                          selectedCollection || '',
+                                          firstVar.description
+                                        );
+                                        
+                                        if (newVarId) {
+                                          // After adding, update the mode
+                                          MasterJSON.updateVariable(newVarId, {
+                                            modeId: mode.modeId
+                                          });
                                           
-                                          if (newVarId) {
-                                            // After adding, update the mode
-                                            MasterJSON.updateVariable(newVarId, {
-                                              modeId: mode.modeId
-                                            });
-                                            
-                                            MasterJSON.saveMasterData();
-                                            const updatedVars = MasterJSON.getVariablesForCollection(selectedCollection || '');
-                                            setVariables(updatedVars);
-                                          }
-                                        }}
-                                      >
-                                        Add Value
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                                          MasterJSON.saveMasterData();
+                                          const updatedVars = MasterJSON.getVariablesForNode(selectedCollection || '');
+                                          setVariables(updatedVars);
+                                        }
+                                      }}
+                                    >
+                                      Add Value
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                           
                           <div className="variable-cell variable-actions-cell">
                             <button 
@@ -772,7 +777,7 @@ const CustomVariableEditor: React.FC = () => {
                                   setTreeData(updatedTree);
                                   
                                   if (selectedCollection) {
-                                    const updatedVars = MasterJSON.getVariablesForCollection(selectedCollection);
+                                    const updatedVars = MasterJSON.getVariablesForNode(selectedCollection);
                                     setVariables(updatedVars);
                                   }
                                 }
@@ -795,7 +800,7 @@ const CustomVariableEditor: React.FC = () => {
                                   setTreeData(updatedTree);
                                   
                                   if (selectedCollection) {
-                                    const updatedVars = MasterJSON.getVariablesForCollection(selectedCollection);
+                                    const updatedVars = MasterJSON.getVariablesForNode(selectedCollection);
                                     setVariables(updatedVars);
                                   }
                                 }
@@ -851,7 +856,7 @@ const CustomVariableEditor: React.FC = () => {
             </div>
             <div className="modal-body">
               <VariableCreator
-                collectionId={selectedCollection}
+                collectionId={selectedCollection.includes('-') ? selectedCollection.split('-')[0] : selectedCollection}
                 allVariables={variables}
                 onVariableCreated={handleVariableCreated}
                 onCancel={() => setShowVariableCreator(false)}
@@ -859,6 +864,16 @@ const CustomVariableEditor: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      
+      {showExportModal && (
+        <ExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          allVariables={variables}
+          selectedModes={availableModes}
+          exportType={exportType}
+        />
       )}
     </div>
   );

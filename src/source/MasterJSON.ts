@@ -65,14 +65,6 @@ const getMasterData = (): MasterData => {
 };
 
 /**
- * Set the master data (completely replace it)
- */
-const setMasterData = (data: MasterData): void => {
-  masterData = { ...data };
-  updateLastModifiedDate();
-};
-
-/**
  * Reset the master data to default from Master.json
  */
 const resetMasterData = (): void => {
@@ -446,62 +438,137 @@ const convertToTreeStructure = (): TreeNode[] => {
 };
 
 /**
- * Get variables for a collection
+ * Get variables recursively for a node and all its child nodes
+ * This is used when selecting a folder in the tree view to show all variables in that folder and its subfolders
  */
-const getVariablesForCollection = (collectionId: string): CustomVariable[] => {
-  const collection = masterData.collections.find(c => c.id === collectionId);
+const getVariablesForNode = (nodeId: string): CustomVariable[] => {
+  // First, check if this is a collection node
+  const collection = masterData.collections.find(c => c.id === nodeId);
+  if (collection) {
+    const result: CustomVariable[] = [];
+    
+    // Process each variable
+    collection.variables.forEach(variable => {
+      // For each mode, create a CustomVariable
+      collection.modes.forEach(mode => {
+        const value = variable.valuesByMode[mode.modeId];
+        
+        // Convert boolean values to strings for the CustomVariable interface
+        let convertedValue: string | number | RGBAValue;
+        if (typeof value === 'boolean') {
+          convertedValue = value.toString();
+        } else {
+          convertedValue = value as string | number | RGBAValue;
+        }
+        
+        const customVar: CustomVariable = {
+          id: variable.id,
+          name: variable.name,
+          fullName: variable.name,
+          valueType: variable.valueType,
+          value: convertedValue,
+          rawValue: convertedValue,
+          modeId: mode.modeId,
+          collectionName: collection.name,
+          collectionId: collection.id,
+          fileId: 'master-json',
+          isColor: variable.valueType === 'COLOR'
+        };
+        
+        if (variable.description) {
+          customVar.description = variable.description;
+        }
+        
+        // Add Figma reference if it exists
+        if (variable.figmaReference) {
+          customVar.figmaReference = {
+            id: variable.figmaReference.id,
+            name: variable.figmaReference.name,
+            collectionName: variable.figmaReference.collectionName,
+            fileId: variable.figmaReference.fileId
+          };
+        }
+        
+        result.push(customVar);
+      });
+    });
+    
+    return result;
+  }
   
-  if (!collection) {
+  // Otherwise, this is a folder node within a collection
+  // Find which collection it belongs to
+  const collectionId = nodeId.split('-')[0];
+  const collection2 = masterData.collections.find(c => c.id === collectionId);
+  
+  if (!collection2) {
     return [];
   }
   
   const result: CustomVariable[] = [];
   
-  // Process each variable
-  collection.variables.forEach(variable => {
-    // For each mode, create a CustomVariable
-    collection.modes.forEach(mode => {
-      const value = variable.valuesByMode[mode.modeId];
-      
-      // Convert boolean values to strings for the CustomVariable interface
-      let convertedValue: string | number | RGBAValue;
-      if (typeof value === 'boolean') {
-        convertedValue = value.toString();
-      } else {
-        convertedValue = value as string | number | RGBAValue;
+  // Recursive function to find all variables in a path
+  const findVariablesInPath = (path: string) => {
+    // If this is a root folder node (like 'Collection-root')
+    if (path === 'root') {
+      path = '';
+    } else {
+      // Extract the path from the node ID (format: collectionId-path)
+      path = nodeId.replace(`${collectionId}-`, '');
+    }
+    
+    // Process each variable
+    collection2.variables.forEach(variable => {
+      // Check if this variable belongs to the selected path or its subfolders
+      if (variable.name.startsWith(path ? `${path}/` : '')) {
+        // For each mode, create a CustomVariable
+        collection2.modes.forEach(mode => {
+          const value = variable.valuesByMode[mode.modeId];
+          
+          // Convert boolean values to strings for the CustomVariable interface
+          let convertedValue: string | number | RGBAValue;
+          if (typeof value === 'boolean') {
+            convertedValue = value.toString();
+          } else {
+            convertedValue = value as string | number | RGBAValue;
+          }
+          
+          const customVar: CustomVariable = {
+            id: variable.id,
+            name: variable.name,
+            fullName: variable.name,
+            valueType: variable.valueType,
+            value: convertedValue,
+            rawValue: convertedValue,
+            modeId: mode.modeId,
+            collectionName: collection2.name,
+            collectionId: collection2.id,
+            fileId: 'master-json',
+            isColor: variable.valueType === 'COLOR'
+          };
+          
+          if (variable.description) {
+            customVar.description = variable.description;
+          }
+          
+          // Add Figma reference if it exists
+          if (variable.figmaReference) {
+            customVar.figmaReference = {
+              id: variable.figmaReference.id,
+              name: variable.figmaReference.name,
+              collectionName: variable.figmaReference.collectionName,
+              fileId: variable.figmaReference.fileId
+            };
+          }
+          
+          result.push(customVar);
+        });
       }
-      
-      const customVar: CustomVariable = {
-        id: variable.id,
-        name: variable.name,
-        fullName: variable.name,
-        valueType: variable.valueType,
-        value: convertedValue,
-        rawValue: convertedValue,
-        modeId: mode.modeId,
-        collectionName: collection.name,
-        collectionId: collection.id,
-        fileId: 'master-json',
-        isColor: variable.valueType === 'COLOR'
-      };
-      
-      if (variable.description) {
-        customVar.description = variable.description;
-      }
-      
-      // Add Figma reference if it exists
-      if (variable.figmaReference) {
-        customVar.figmaReference = {
-          id: variable.figmaReference.id,
-          name: variable.figmaReference.name,
-          collectionName: variable.figmaReference.collectionName,
-          fileId: variable.figmaReference.fileId
-        };
-      }
-      
-      result.push(customVar);
     });
-  });
+  };
+  
+  // Find variables in the selected path
+  findVariablesInPath(nodeId);
   
   return result;
 };
@@ -529,37 +596,6 @@ const loadMasterData = (): boolean => {
     }
   } catch (error) {
     console.error('Error loading master data from localStorage:', error);
-  }
-  
-  return false;
-};
-
-/**
- * Export the master data as a JSON string
- */
-const exportMasterData = (): string => {
-  return JSON.stringify(masterData, null, 2);
-};
-
-/**
- * Import master data from a JSON string
- */
-const importMasterData = (jsonString: string): boolean => {
-  try {
-    const data = JSON.parse(jsonString) as MasterData;
-    
-    // Basic validation
-    if (
-      data && 
-      data.metadata && 
-      Array.isArray(data.collections)
-    ) {
-      masterData = data;
-      updateLastModifiedDate();
-      return true;
-    }
-  } catch (error) {
-    console.error('Error importing master data:', error);
   }
   
   return false;
@@ -623,46 +659,8 @@ const removeFigmaVariableLink = (customVariableId: string): boolean => {
   return false;
 };
 
-/**
- * Get all linked Figma variables
- */
-const getLinkedFigmaVariables = (): Array<{
-  customVariableId: string;
-  figmaReference: {
-    id: string;
-    name: string;
-    collectionName: string;
-    fileId: string;
-  }
-}> => {
-  const linked: Array<{
-    customVariableId: string;
-    figmaReference: {
-      id: string;
-      name: string;
-      collectionName: string;
-      fileId: string;
-    }
-  }> = [];
-  
-  // Scan all collections and variables
-  masterData.collections.forEach(collection => {
-    collection.variables.forEach(variable => {
-      if (variable.figmaReference) {
-        linked.push({
-          customVariableId: variable.id,
-          figmaReference: variable.figmaReference
-        });
-      }
-    });
-  });
-  
-  return linked;
-};
-
 export default {
   getMasterData,
-  setMasterData,
   resetMasterData,
   addCollection,
   renameCollection,
@@ -674,12 +672,9 @@ export default {
   deleteMode,
   getCollectionModes,
   convertToTreeStructure,
-  getVariablesForCollection,
+  getVariablesForNode,
   saveMasterData,
   loadMasterData,
-  exportMasterData,
-  importMasterData,
   linkFigmaVariable,
-  removeFigmaVariableLink,
-  getLinkedFigmaVariables
+  removeFigmaVariableLink
 }; 
