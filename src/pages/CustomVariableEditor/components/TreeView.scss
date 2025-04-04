@@ -1,0 +1,141 @@
+.tree-view {
+  width: 100%;
+  font-size: 14px;
+  
+  .tree-node-container {
+    width: 100%;
+    
+    .tree-node {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+      position: relative;
+      
+      &:hover {
+        background-color: #e9ecef;
+        
+        .node-actions {
+          opacity: 1;
+        }
+      }
+      
+      &.selected {
+        background-color: #e1effe;
+        color: #1677ff;
+        font-weight: 500;
+      }
+      
+      .toggle-icon {
+        margin-right: 6px;
+        font-size: 10px;
+        color: #555;
+        cursor: pointer;
+        width: 12px;
+        text-align: center;
+      }
+      
+      .node-icon {
+        margin-right: 8px;
+        
+        &.folder {
+          color: #faad14;
+        }
+        
+        &.file, &.variable {
+          color: #1677ff;
+        }
+      }
+      
+      .node-name {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      
+      .rename-input {
+        flex: 1;
+        border: 1px solid #1677ff;
+        border-radius: 2px;
+        padding: 2px 5px;
+        font-size: 14px;
+        outline: none;
+      }
+      
+      .node-actions {
+        display: flex;
+        align-items: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+        
+        .node-action {
+          background: none;
+          border: none;
+          color: #555;
+          margin-left: 5px;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 4px;
+          
+          &:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+          }
+          
+          &.add-variable {
+            color: #52c41a;
+          }
+          
+          &.rename {
+            color: #1677ff;
+          }
+          
+          &.delete {
+            color: #ff4d4f;
+          }
+        }
+      }
+    }
+    
+    .tree-node-children {
+      margin-left: 0;
+    }
+  }
+  
+  .tree-actions {
+    padding: 12px;
+    display: flex;
+    justify-content: center;
+    
+    .add-collection-btn {
+      background-color: #f0f0f0;
+      border: 1px solid #d9d9d9;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 14px;
+      color: #595959;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      
+      &:hover {
+        background-color: #e6f7ff;
+        border-color: #91d5ff;
+        color: #1677ff;
+      }
+      
+      &::before {
+        content: "+";
+        margin-right: 5px;
+        font-weight: bold;
+      }
+    }
+  }
+} 

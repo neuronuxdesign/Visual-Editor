@@ -1,0 +1,189 @@
+{
+  "metadata": {
+    "exportDate": "2023-07-18T14:30:00.000Z",
+    "lastModifiedDate": "2023-07-18T14:30:00.000Z",
+    "version": "1.0.0"
+  },
+  "collections": [
+    {
+      "id": "c1",
+      "name": "Global",
+      "modes": [
+        { "modeId": "1:0", "name": "Light" },
+        { "modeId": "1:1", "name": "Dark" },
+        { "modeId": "1:2", "name": "Grayscale" },
+        { "modeId": "1:3", "name": "Monochrome" }
+      ],
+      "variables": [
+        {
+          "id": "v1",
+          "name": "color/primary",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 0.1, "g": 0.5, "b": 0.9, "a": 1 },
+            "1:1": { "r": 0.2, "g": 0.6, "b": 1, "a": 1 },
+            "1:2": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 },
+            "1:3": { "r": 0, "g": 0, "b": 0, "a": 1 }
+          },
+          "description": "Primary color used for buttons and links"
+        },
+        {
+          "id": "v2",
+          "name": "color/secondary",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 0.8, "g": 0.3, "b": 0.5, "a": 1 },
+            "1:1": { "r": 0.9, "g": 0.4, "b": 0.6, "a": 1 },
+            "1:2": { "r": 0.3, "g": 0.3, "b": 0.3, "a": 1 },
+            "1:3": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 }
+          },
+          "description": "Secondary color used for accents"
+        },
+        {
+          "id": "v3",
+          "name": "font/size/base",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 16,
+            "1:1": 16,
+            "1:2": 16,
+            "1:3": 16
+          },
+          "description": "Base font size in pixels"
+        },
+        {
+          "id": "v4",
+          "name": "spacing/small",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 8,
+            "1:1": 8,
+            "1:2": 8,
+            "1:3": 8
+          },
+          "description": "Small spacing used in components"
+        },
+        {
+          "id": "v5",
+          "name": "spacing/medium",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 16,
+            "1:1": 16,
+            "1:2": 16,
+            "1:3": 16
+          },
+          "description": "Medium spacing used in components"
+        },
+        {
+          "id": "v6",
+          "name": "spacing/large",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 24,
+            "1:1": 24,
+            "1:2": 24,
+            "1:3": 24
+          },
+          "description": "Large spacing used in components"
+        },
+        {
+          "id": "v7",
+          "name": "border/radius/small",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 4,
+            "1:1": 4,
+            "1:2": 4,
+            "1:3": 4
+          },
+          "description": "Small border radius for components"
+        },
+        {
+          "id": "v8",
+          "name": "border/radius/medium",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 8,
+            "1:1": 8,
+            "1:2": 8,
+            "1:3": 8
+          },
+          "description": "Medium border radius for components"
+        },
+        {
+          "id": "v9",
+          "name": "border/radius/large",
+          "valueType": "FLOAT",
+          "valuesByMode": {
+            "1:0": 16,
+            "1:1": 16,
+            "1:2": 16,
+            "1:3": 16
+          },
+          "description": "Large border radius for components"
+        },
+        {
+          "id": "v10",
+          "name": "color/text/primary",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 0.1, "g": 0.1, "b": 0.1, "a": 1 },
+            "1:1": { "r": 0.9, "g": 0.9, "b": 0.9, "a": 1 },
+            "1:2": { "r": 0.1, "g": 0.1, "b": 0.1, "a": 1 },
+            "1:3": { "r": 0, "g": 0, "b": 0, "a": 1 }
+          },
+          "description": "Primary text color"
+        },
+        {
+          "id": "v11",
+          "name": "color/text/secondary",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 },
+            "1:1": { "r": 0.7, "g": 0.7, "b": 0.7, "a": 1 },
+            "1:2": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 },
+            "1:3": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 }
+          },
+          "description": "Secondary text color"
+        },
+        {
+          "id": "v12",
+          "name": "color/background/primary",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 1, "g": 1, "b": 1, "a": 1 },
+            "1:1": { "r": 0.1, "g": 0.1, "b": 0.1, "a": 1 },
+            "1:2": { "r": 1, "g": 1, "b": 1, "a": 1 },
+            "1:3": { "r": 1, "g": 1, "b": 1, "a": 1 }
+          },
+          "description": "Primary background color"
+        },
+        {
+          "id": "v13",
+          "name": "color/background/secondary",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 0.95, "g": 0.95, "b": 0.95, "a": 1 },
+            "1:1": { "r": 0.2, "g": 0.2, "b": 0.2, "a": 1 },
+            "1:2": { "r": 0.95, "g": 0.95, "b": 0.95, "a": 1 },
+            "1:3": { "r": 0.9, "g": 0.9, "b": 0.9, "a": 1 }
+          },
+          "description": "Secondary background color"
+        },
+        {
+          "id": "v14",
+          "name": "color/border",
+          "valueType": "COLOR",
+          "valuesByMode": {
+            "1:0": { "r": 0.8, "g": 0.8, "b": 0.8, "a": 1 },
+            "1:1": { "r": 0.3, "g": 0.3, "b": 0.3, "a": 1 },
+            "1:2": { "r": 0.8, "g": 0.8, "b": 0.8, "a": 1 },
+            "1:3": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1 }
+          },
+          "description": "Border color"
+        }
+      ]
+    }
+  ]
+} 

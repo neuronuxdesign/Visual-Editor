@@ -1,0 +1,315 @@
+.color-selector {
+  position: relative;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  
+  .color-display {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    
+    &:hover {
+      border-color: #aaa;
+    }
+    
+    .color-preview {
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    
+    .color-value {
+      flex: 1;
+      font-size: 13px;
+      color: #555;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .figma-reference {
+      margin-left: 8px;
+      font-size: 11px;
+      color: #0066cc;
+      background-color: rgba(0, 102, 204, 0.1);
+      padding: 2px 5px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    
+    .dropdown-arrow {
+      margin-left: 8px;
+      color: #999;
+      font-size: 10px;
+    }
+  }
+  
+  .color-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-width: 400px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-top: 4px;
+    z-index: 100;
+    overflow: hidden;
+    
+    .color-editor {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      
+      .color-preview-large {
+        width: 100%;
+        height: 40px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        background-image: 
+          linear-gradient(45deg, #ccc 25%, transparent 25%), 
+          linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+          linear-gradient(45deg, transparent 75%, #ccc 75%), 
+          linear-gradient(-45deg, transparent 75%, #ccc 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        position: relative;
+        
+        &::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          border-radius: 4px;
+          background-color: inherit;
+        }
+      }
+      
+      .rgb-inputs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        
+        .input-group {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          
+          label {
+            width: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #555;
+          }
+          
+          input {
+            flex: 1;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 100%;
+            
+            &:focus {
+              outline: none;
+              border-color: #0066cc;
+            }
+          }
+        }
+      }
+      
+      .alpha-slider {
+        margin-bottom: 10px;
+        
+        label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 13px;
+          color: #555;
+        }
+        
+        input[type="range"] {
+          width: 100%;
+          height: 6px;
+          -webkit-appearance: none;
+          appearance: none;
+          border-radius: 3px;
+          outline: none;
+          background-size: 100% 100%;
+          
+          &::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          }
+          
+          &::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          }
+        }
+      }
+      
+      .color-actions {
+        display: flex;
+        justify-content: flex-end;
+        
+        .apply-btn {
+          padding: 6px 12px;
+          background-color: #0066cc;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          font-size: 13px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+          
+          &:hover {
+            background-color: #0052a3;
+          }
+        }
+      }
+    }
+    
+    .figma-variables {
+      max-height: 200px;
+      overflow-y: auto;
+      
+      .search-bar {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        
+        input {
+          width: 100%;
+          padding: 6px 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 13px;
+          
+          &:focus {
+            outline: none;
+            border-color: #0066cc;
+          }
+        }
+      }
+      
+      .variables-list {
+        max-height: 160px;
+        overflow-y: auto;
+        
+        .variable-option {
+          display: flex;
+          align-items: center;
+          padding: 8px 10px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+          
+          &:hover {
+            background-color: #f5f5f5;
+          }
+          
+          .color-preview {
+            margin-right: 10px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+          }
+          
+          .variable-info {
+            flex: 1;
+            min-width: 0;
+            
+            .variable-name {
+              font-size: 13px;
+              color: #333;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            
+            .collection-name {
+              font-size: 11px;
+              color: #666;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+          }
+        }
+        
+        .no-variables {
+          padding: 15px 10px;
+          text-align: center;
+          color: #999;
+          font-size: 13px;
+          font-style: italic;
+        }
+      }
+    }
+    
+    .reference-info {
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-top: 1px solid #eee;
+      font-size: 13px;
+      
+      .reference-header {
+        margin-bottom: 6px;
+        font-weight: bold;
+        color: #333;
+      }
+      
+      .reference-details {
+        margin-bottom: 8px;
+        
+        .reference-name {
+          font-weight: bold;
+          color: #0066cc;
+        }
+        
+        .reference-collection {
+          color: #666;
+          margin-left: 4px;
+        }
+      }
+      
+      .unlink-btn {
+        padding: 4px 10px;
+        background-color: #f5f5f5;
+        color: #ff3b30;
+        border: 1px solid #ff3b30;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        
+        &:hover {
+          background-color: #ff3b30;
+          color: white;
+        }
+      }
+    }
+  }
+} 

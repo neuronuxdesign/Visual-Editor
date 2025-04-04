@@ -1,4 +1,4 @@
-import { RGBAValue } from '../VisualEditor/types';
+import type { RGBAValue } from '../../types/common';
 
 // Custom variable structure
 export interface CustomVariable {
@@ -7,23 +7,29 @@ export interface CustomVariable {
   fullName?: string; // The full name including any path segments
   path?: string; // Path segments like 'spacing/margin'
   valueType: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN' | 'VARIABLE_ALIAS';
-  value: string | RGBAValue | number;
-  rawValue: string | RGBAValue | number | boolean | null | Record<string, unknown>;
+  value: string | number | RGBAValue;
+  rawValue: string | number | RGBAValue;
   modeId: string;
   collectionName: string; // Either 'Mapped' or one of the themes
-  collectionId: string;
-  fileId: string;
+  collectionId?: string;
+  fileId?: string;
   isColor?: boolean;
   description?: string;
   referencedVariable?: {
     id: string;
     collection: string;
     name: string;
-    finalValue: string | RGBAValue | number | null;
-    finalValueType: 'COLOR' | 'FLOAT' | 'BOOLEAN' | 'STRING' | 'VARIABLE_ALIAS';
+    finalValue: unknown;
+    finalValueType: string;
+    fileId?: string;
+  };
+  source?: string;
+  figmaReference?: {
+    id: string;
+    name: string;
+    collectionName: string;
     fileId: string;
   };
-  source?: 'Mapped' | 'Theme';
 }
 
 // Overall data structure
