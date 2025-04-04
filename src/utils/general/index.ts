@@ -46,7 +46,7 @@ export const transformFigmaVariables = (
       if (isColor) {
         valueType = 'COLOR';
       } else if (typeof value === 'number') {
-        valueType = 'NUMBER';
+        valueType = 'FLOAT';
       } else if (typeof value === 'boolean') {
         valueType = 'BOOLEAN';
       }

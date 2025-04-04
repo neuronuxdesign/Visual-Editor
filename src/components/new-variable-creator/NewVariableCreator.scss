@@ -80,6 +80,15 @@
   width: 100%;
 }
 
+/* Boolean toggle specific styles */
+.boolean-toggle-wrapper {
+  padding: 8px 0;
+  
+  .boolean-toggle-container {
+    justify-content: flex-start;
+  }
+}
+
 /* Ensure alignment with the table structure */
 .new-variable-row .variable-mode-value-cell {
   min-height: 70px;

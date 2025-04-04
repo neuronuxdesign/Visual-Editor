@@ -227,4 +227,73 @@
       }
     }
   }
+
+  .string-value-display {
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+
+  .string-edit-container {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .string-input-container {
+    width: 100%;
+
+    .string-value-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      
+      &:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+      }
+    }
+  }
+
+  .mode-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .boolean-value-display {
+    display: flex;
+    align-items: center;
+    
+    .boolean-indicator {
+      font-family: var(--font-mono, monospace);
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 13px;
+      font-weight: 500;
+      
+      &.true {
+        background-color: #e3f9e5;
+        color: #0d6831;
+        border: 1px solid #c1e7c5;
+      }
+      
+      &.false {
+        background-color: #ffe8e8;
+        color: #c81e1e;
+        border: 1px solid #f5c8c8;
+      }
+    }
+  }
+
+  .boolean-edit-container {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
 } 

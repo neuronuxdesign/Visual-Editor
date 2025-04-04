@@ -194,44 +194,7 @@ export const storeAllColorsFigmaFileId = (fileId: string): void => {
  * Get Figma file ID for a specific project
  */
 export const getFigmaFileIdForProject = (projectKey: string): string => {
-  return PROJECT_FIGMA_FILES[projectKey as keyof typeof PROJECT_FIGMA_FILES] || '';
-};
-
-/**
- * Debug function to check if environment variables are properly loaded
- * Returns an object with the current state of all environment variables
- */
-export const debugEnvironmentVariables = (): Record<string, string | undefined> => {
-  const env = import.meta.env;
-  const space = getSelectedSpace();
-  
-  return {
-    // Test Space
-    [ENV_KEYS.FIGMA_TOKEN]: typeof env[ENV_KEYS.FIGMA_TOKEN] === 'string' ? 
-      `${env[ENV_KEYS.FIGMA_TOKEN].substring(0, 4)}...` : 'not set',
-    [ENV_KEYS.FIGMA_FILE_ID]: env[ENV_KEYS.FIGMA_FILE_ID] || 'not set',
-    [ENV_KEYS.FIGMA_THEME_FILE_ID]: env[ENV_KEYS.FIGMA_THEME_FILE_ID] || 'not set',
-    
-    // Neuron Space
-    [ENV_KEYS.FIGMA_TOKEN_NEURON]: typeof env[ENV_KEYS.FIGMA_TOKEN_NEURON] === 'string' ? 
-      `${env[ENV_KEYS.FIGMA_TOKEN_NEURON].substring(0, 4)}...` : 'not set',
-    [ENV_KEYS.FIGMA_FILE_ID_NEURON]: env[ENV_KEYS.FIGMA_FILE_ID_NEURON] || 'not set',
-    [ENV_KEYS.FIGMA_THEME_FILE_ID_NEURON]: env[ENV_KEYS.FIGMA_THEME_FILE_ID_NEURON] || 'not set',
-    
-    // HMH Space
-    [ENV_KEYS.FIGMA_TOKEN_HMH]: typeof env[ENV_KEYS.FIGMA_TOKEN_HMH] === 'string' ? 
-      `${env[ENV_KEYS.FIGMA_TOKEN_HMH].substring(0, 4)}...` : 'not set',
-    [ENV_KEYS.FIGMA_FILE_ID_HMH]: env[ENV_KEYS.FIGMA_FILE_ID_HMH] || 'not set',
-    [ENV_KEYS.FIGMA_THEME_FILE_ID_HMH]: env[ENV_KEYS.FIGMA_THEME_FILE_ID_HMH] || 'not set',
-    
-    // Current space and status
-    'Selected Space': space,
-    'Manual Input Allowed': isManualFileIdAllowed() ? 'Yes' : 'No',
-    'Active Token': getFigmaToken() ? `${getFigmaToken().substring(0, 4)}...` : 'not set',
-    'Active Mapped File ID': getStoredFigmaFileId() || 'not set',
-    'Active Theme File ID': getStoredThemeFigmaFileId() || 'not set',
-    'Active All Colors File ID': getStoredAllColorsFigmaFileId() || 'not set'
-  };
+  return PROJECT_FIGMA_FILES[projectKey] || DEFAULT_FIGMA_FILE_ID;
 };
 
 export default {
@@ -252,6 +215,5 @@ export default {
   storeThemeFigmaFileId,
   getStoredAllColorsFigmaFileId,
   storeAllColorsFigmaFileId,
-  getFigmaFileIdForProject,
-  debugEnvironmentVariables
+  getFigmaFileIdForProject
 }; 

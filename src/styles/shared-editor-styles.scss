@@ -1,0 +1,276 @@
+// Define variables for editors
+:root {
+  --primary-color: #007FFF;
+  --secondary-color: #0066cc;
+  --text-color: #333;
+  --border-color: #ddd;
+  --background-color: #f5f5f5;
+  --header-background: #fff;
+  --button-background: #007FFF;
+  --button-text: white;
+  --table-header-bg: #f9f9f9;
+  --table-border: #e0e0e0;
+  --sidebar-background: #f9f9f9;
+  --sidebar-hover: #f2f2f2;
+  --sidebar-selected: #e6e6e6;
+  --sidebar-border: #e0e0e0;
+}
+
+// App container
+.app-container {
+  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 172px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  overflow: hidden;
+}
+
+// Sidebar styles
+.sidebar {
+  width: 250px;
+  background-color: var(--sidebar-background);
+  border-right: 1px solid var(--sidebar-border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  height: calc(100vh - 82px);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  height: 72px;
+  min-height: 72px;
+}
+
+.sidebar-logo {
+  width: 100px;
+  height: auto;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+// Tree View Styles
+.tree-view-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  
+  &.root {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+}
+
+.tree-view-item {
+  margin: 0;
+  padding: 0;
+}
+
+.tree-view-node {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 3px;
+  
+  &:hover {
+    background-color: var(--sidebar-hover);
+  }
+  
+  &.selected {
+    background-color: var(--sidebar-selected);
+  }
+}
+
+.tree-toggle-icon {
+  width: 16px;
+  display: inline-block;
+  text-align: center;
+  margin-right: 4px;
+  color: #888;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.tree-node-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  display: inline-block;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  
+  &.folder {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'%3E%3C/path%3E%3C/svg%3E");
+  }
+  
+  &.file {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z'%3E%3C/path%3E%3Cpolyline points='13 2 13 9 20 9'%3E%3C/polyline%3E%3C/svg%3E");
+  }
+}
+
+.tree-node-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+li .tree-view-list {
+  margin-left: 24px;
+}
+
+// Main content
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  height: calc(100vh - 82px);
+}
+
+// Header styles
+.header-section {
+  background-color: var(--header-background);
+  border-bottom: 1px solid var(--border-color);
+  min-height: 72px;
+  height: 72px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+}
+
+.header-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-color);
+  margin-right: 24px;
+}
+
+.figma-file-name {
+  font-size: 16px;
+  font-weight: 400;
+  color: #666;
+}
+
+.main-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-top-section {
+  padding: 24px;
+  background-color: var(--header-background);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.selectors-container {
+  position: relative;
+  z-index: 11;
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.selected-brand-section, .selected-theme-section, .selected-mode-section {
+  label {
+    display: block;
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  
+  .brand-dropdown-container, .theme-dropdown-container, .mode-dropdown-container {
+    width: 200px;
+  }
+  
+  .custom-dropdown-arrow {
+    color: #888;
+    font-size: 10px;
+    padding-right: 8px;
+  }
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Make react-select components match our design */
+.react-select-container {
+  width: 220px;
+}
+
+.react-select__control {
+  min-width: 200px;
+  min-height: 36px !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+  border-radius: 4px !important;
+  
+  &:hover {
+    border-color: var(--primary-color) !important;
+  }
+  
+  &--is-focused {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 1px var(--primary-color) !important;
+  }
+}
+
+.react-select__value-container {
+  padding: 2px 8px !important;
+}
+
+.react-select__indicator {
+  padding: 0 8px !important;
+}
+
+.react-select__single-value {
+  font-size: 14px !important;
+}
+
+.react-select__menu {
+  z-index: 100;
+  border-radius: 4px !important;
+  margin-top: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Content area */
+.content-area {
+  flex: 1;
+  padding: 24px;
+  background-color: var(--background-color);
+  display: flex;
+  flex-direction: column;
+}
+
+/* No collection selected message */
+.no-collection-selected {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  font-size: 16px;
+  color: #888;
+} 

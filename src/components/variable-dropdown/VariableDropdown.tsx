@@ -6,18 +6,7 @@ import { Variable, RGBAValue } from '../../types/common';
 import { VariableOption, VariableDropdownProps } from './types';
 import ReferenceChainPreview from '../reference-chain-preview/ReferenceChainPreview';
 import Button from '../../ui/Button';
-
-// Helper function to find a variable by its value
-const findVariableByValue = (
-  value: string, 
-  valueType: string, 
-  variables: Variable[]
-): Variable | undefined => {
-  return variables.find(v => 
-    v.valueType === valueType && 
-    v.value === value
-  );
-};
+import { BooleanToggle } from '../shared';
 
 const VariableDropdown: React.FC<VariableDropdownProps> = ({ 
   variable, 
@@ -29,6 +18,20 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [customValue, setCustomValue] = useState(variable.value);
   const [lastAppliedValue, setLastAppliedValue] = useState(variable.value);
+  const [booleanValue, setBooleanValue] = useState(() => {
+    // Initialize the boolean value from the variable
+    if (variable.valueType === 'BOOLEAN') {
+      if (typeof variable.rawValue === 'boolean') {
+        return variable.rawValue;
+      } else if (typeof variable.rawValue === 'string') {
+        return variable.rawValue.toLowerCase() === 'true';
+      } else if (typeof variable.value === 'string') {
+        return variable.value.toLowerCase() === 'true';
+      }
+      return false;
+    }
+    return false;
+  });
   const [originalValue, setOriginalValue] = useState<{
     value: string;
     referencedVariable?: Variable;
@@ -53,7 +56,18 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
   useEffect(() => {
     setCustomValue(variable.value);
     setLastAppliedValue(variable.value);
-  }, [variable, variable.value]);
+
+    // Update boolean value when variable changes
+    if (variable.valueType === 'BOOLEAN') {
+      if (typeof variable.rawValue === 'boolean') {
+        setBooleanValue(variable.rawValue);
+      } else if (typeof variable.rawValue === 'string') {
+        setBooleanValue(variable.rawValue.toLowerCase() === 'true');
+      } else if (typeof variable.value === 'string') {
+        setBooleanValue(variable.value.toLowerCase() === 'true');
+      }
+    }
+  }, [variable, variable.value, variable.rawValue]);
   
   // Store original value on first load
   useEffect(() => {
@@ -109,44 +123,54 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
     return options;
   };
   
-  // Handle applying custom value
+  // Apply custom value and close dropdown
   const handleApplyCustomValue = () => {
-    // Save the value we're about to apply
-    setLastAppliedValue(customValue);
-    
-    console.log('[DEBUG] Applying custom value:', {
-      variableId: variable.id,
-      variableName: variable.name,
-      oldValue: variable.value,
-      newValue: customValue,
-      time: new Date().toISOString()
-    });
-    
-    // Check if this value matches an existing variable
-    const matchingVariable = findVariableByValue(customValue, variable.valueType, allVariables);
-    
-    if (matchingVariable && matchingVariable.id !== variable.id) {
-      // If value matches an existing variable, set it as a reference
-      onValueChange(variable, customValue, true, matchingVariable);
-    } else {
-      // Otherwise just update the value directly
-      onValueChange(variable, customValue);
+    // For BOOLEAN type, use the booleanValue state
+    if (variable.valueType === 'BOOLEAN') {
+      console.log('[DEBUG] Applying boolean value:', {
+        from: variable.value,
+        to: booleanValue,
+        variableId: variable.id,
+        time: new Date().toISOString()
+      });
+      
+      // Convert boolean to string for the API
+      onValueChange(variable, String(booleanValue));
+      setLastAppliedValue(String(booleanValue));
+      setIsOpen(false);
+      return;
     }
-    
-    // Close the dropdown after applying the value
+
+    // For other types, use the customValue
+    if (customValue !== variable.value) {
+      console.log('[DEBUG] Applying custom value:', {
+        from: variable.value,
+        to: customValue,
+        variableId: variable.id,
+        time: new Date().toISOString()
+      });
+      
+      // Apply the new custom value
+      onValueChange(variable, customValue);
+      setLastAppliedValue(customValue);
+    }
     setIsOpen(false);
   };
   
-  // Handle selecting a reference
+  // Handle selecting a reference variable
   const handleSelectReference = (option: VariableOption) => {
     if (option.original) {
-      onValueChange(variable, option.value, true, option.original);
-    } else {
-      onValueChange(variable, option.value);
+      console.log('[DEBUG] Selecting reference variable:', {
+        option,
+        variableId: variable.id,
+        time: new Date().toISOString()
+      });
+      onValueChange(variable, option.original.value, true, option.original);
+      setLastAppliedValue(option.original.value);
     }
     setIsOpen(false);
   };
-
+  
   // Reset to original value when canceling
   const handleCancel = () => {
     if (originalValue) {
@@ -161,6 +185,13 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
         onValueChange(variable, originalValue.value, true, originalValue.referencedVariable);
       } else {
         onValueChange(variable, originalValue.value);
+      }
+
+      // Also reset boolean value if applicable
+      if (variable.valueType === 'BOOLEAN') {
+        if (typeof originalValue.value === 'string') {
+          setBooleanValue(originalValue.value.toLowerCase() === 'true');
+        }
       }
     }
     setIsOpen(false);
@@ -241,9 +272,68 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
         );
       }
       return <span>{lastAppliedValue || variable.value}</span>;
+    } else if (variable.valueType === 'STRING') {
+      // Simple display for STRING type - just show the value
+      return <span className="string-value-display">{lastAppliedValue || variable.value}</span>;
+    } else if (variable.valueType === 'BOOLEAN') {
+      // Special display for BOOLEAN type
+      const displayValue = typeof booleanValue === 'boolean' 
+        ? booleanValue 
+        : (lastAppliedValue || variable.value).toLowerCase() === 'true';
+        
+      return (
+        <div className="boolean-value-display">
+          <span className={`boolean-indicator ${displayValue ? 'true' : 'false'}`}>
+            {displayValue ? 'True' : 'False'}
+          </span>
+        </div>
+      );
     } else {
       return <span>{lastAppliedValue || variable.value}</span>;
     }
+  };
+  
+  // Render STRING input when in edit mode (dropdown is open)
+  const renderStringInput = () => {
+    if (variable.valueType !== 'STRING') return null;
+    
+    return (
+      <div className="string-input-container">
+        <input 
+          type="text" 
+          className="string-value-input"
+          value={customValue}
+          onChange={(e) => setCustomValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleApplyCustomValue();
+            }
+          }}
+          autoFocus
+        />
+      </div>
+    );
+  };
+
+  // Render BOOLEAN toggle when in edit mode (dropdown is open)
+  const renderBooleanToggle = () => {
+    if (variable.valueType !== 'BOOLEAN') return null;
+    
+    return (
+      <div className="boolean-toggle-container">
+        <BooleanToggle
+          value={booleanValue}
+          onChange={(value) => {
+            setBooleanValue(value);
+            if (!isOpen) {
+              // Convert boolean to string for the API and apply immediately if not in dropdown mode
+              onValueChange(variable, String(value));
+              setLastAppliedValue(String(value));
+            }
+          }}
+        />
+      </div>
+    );
   };
   
   return (
@@ -288,8 +378,12 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
                   ></div>
                   <span>{variable.value}</span>
                 </>
+              ) : variable.valueType === 'BOOLEAN' ? (
+                <span className={`boolean-indicator ${booleanValue ? 'true' : 'false'}`}>
+                  {booleanValue ? 'True' : 'False'}
+                </span>
               ) : (
-                // For non-color values, just show the value
+                // For other non-color values, just show the value
                 <span className="text-value">{variable.value}</span>
               )}
             </div>
@@ -307,78 +401,123 @@ const VariableDropdown: React.FC<VariableDropdownProps> = ({
           
           {isOpen && (
             <div className="dropdown-menu">
-              <div className="dropdown-search">
-                <input 
-                  type="text" 
-                  placeholder="Search variables..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              
-              <div className="dropdown-custom">
-                <input 
-                  type="text" 
-                  placeholder="Add custom value..."
-                  value={customValue}
-                  onChange={(e) => setCustomValue(e.target.value)}
-                />
-                <Button
-                  variant="primary"
-                  onClick={handleApplyCustomValue}
-                >
-                  Apply
-                </Button>
-                <Button
-                  variant="outlined"
-                  danger
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </Button>
-              </div>
-              
-              <div className="dropdown-options">
-                {getOptions().map((option, index) => (
-                  <div 
-                    key={`${option.value}-${index}`}
-                    className={`dropdown-option ${option.isCustom ? 'custom-option' : ''}`}
-                    onClick={() => option.isCustom ? handleApplyCustomValue() : handleSelectReference(option)}
-                  >
-                    <div className="option-content">
-                      <div className="option-label">
-                        {option.color && (
-                          <div 
-                            className="color-preview" 
-                            style={{ 
-                              backgroundColor: `rgba(${option.color.r}, ${option.color.g}, ${option.color.b}, ${option.color.a || 1})`,
-                              width: '12px',
-                              height: '12px',
-                              borderRadius: '2px',
-                              marginRight: '5px',
-                              display: 'inline-block',
-                              verticalAlign: 'middle'
-                            }}
-                          />
-                        )}
-                        <span>{option.label}</span>
-                      </div>
-                      
-                      {/* Show reference chain preview for VARIABLE_ALIAS type */}
-                      {option.original && option.original.valueType === 'VARIABLE_ALIAS' && option.original.referencedVariable && (
-                        <div className="option-reference-preview">
-                          <ReferenceChainPreview 
-                            variableId={option.original.referencedVariable.id}
-                            allVariables={allVariables}
-                            showColorPreview={true}
-                            className="in-dropdown"
-                          />
-                        </div>
-                      )}
-                    </div>
+              {variable.valueType === 'STRING' ? (
+                // For STRING type, show a simplified edit view with just the input
+                <div className="string-edit-container">
+                  {renderStringInput()}
+                  <div className="mode-buttons">
+                    <Button
+                      variant="primary"
+                      onClick={handleApplyCustomValue}
+                    >
+                      Apply
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      danger
+                      onClick={handleCancel}
+                    >
+                      Cancel
+                    </Button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : variable.valueType === 'BOOLEAN' ? (
+                // For BOOLEAN type, show a toggle switch
+                <div className="boolean-edit-container">
+                  {renderBooleanToggle()}
+                  <div className="mode-buttons">
+                    <Button
+                      variant="primary"
+                      onClick={handleApplyCustomValue}
+                    >
+                      Apply
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      danger
+                      onClick={handleCancel}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                // For other types, show the full dropdown menu
+                <>
+                  <div className="dropdown-search">
+                    <input 
+                      type="text" 
+                      placeholder="Search variables..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div className="dropdown-custom">
+                    <input 
+                      type="text" 
+                      placeholder="Add custom value..."
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                    />
+                    <Button
+                      variant="primary"
+                      onClick={handleApplyCustomValue}
+                    >
+                      Apply
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      danger
+                      onClick={handleCancel}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  
+                  <div className="dropdown-options">
+                    {getOptions().map((option, index) => (
+                      <div 
+                        key={`${option.value}-${index}`}
+                        className={`dropdown-option ${option.isCustom ? 'custom-option' : ''}`}
+                        onClick={() => option.isCustom ? handleApplyCustomValue() : handleSelectReference(option)}
+                      >
+                        <div className="option-content">
+                          <div className="option-label">
+                            {option.color && (
+                              <div 
+                                className="color-preview" 
+                                style={{ 
+                                  backgroundColor: `rgba(${option.color.r}, ${option.color.g}, ${option.color.b}, ${option.color.a || 1})`,
+                                  width: '12px',
+                                  height: '12px',
+                                  borderRadius: '2px',
+                                  marginRight: '5px',
+                                  display: 'inline-block',
+                                  verticalAlign: 'middle'
+                                }}
+                              />
+                            )}
+                            <span>{option.label}</span>
+                          </div>
+                          
+                          {/* Show reference chain preview for VARIABLE_ALIAS type */}
+                          {option.original && option.original.valueType === 'VARIABLE_ALIAS' && option.original.referencedVariable && (
+                            <div className="option-reference-preview">
+                              <ReferenceChainPreview 
+                                variableId={option.original.referencedVariable.id}
+                                allVariables={allVariables}
+                                showColorPreview={true}
+                                className="in-dropdown"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>
