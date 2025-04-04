@@ -598,7 +598,35 @@ const NewVariableCreator: React.FC<NewVariableCreatorProps> = ({
       setIsLoading(false);
     } catch (error) {
       console.error('Error saving variable:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Unknown error saving variable');
+      
+      // Extract detailed error message if available
+      let errorMsg = 'Unknown error saving variable';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else if (typeof error === 'string') {
+        errorMsg = error;
+      }
+      
+      // Extract error from Figma API response if available
+      if (error && typeof error === 'object' && 'response' in error) {
+        const apiError = error as { 
+          response?: { 
+            data?: { 
+              message?: string;
+              error?: string;
+            } 
+          } 
+        };
+        
+        if (apiError.response?.data?.message) {
+          errorMsg = apiError.response.data.message;
+        } else if (apiError.response?.data?.error) {
+          errorMsg = apiError.response.data.error;
+        }
+      }
+      
+      setErrorMessage(`Error saving variable\n${errorMsg}`);
+      setLoadingMessage(''); // Clear the loading message
       setIsLoading(false);
     }
   };

@@ -11,6 +11,7 @@ import figmaApi from '../../utils/figmaApi'
 import { TreeNode, Variable, RGBAValue, FigmaVariablesData } from './types'
 import { LoadingMessage } from '../../components/shared'
 import VariablesList from '../../components/variables-list/VariablesList'
+import MappingPreview from '../../components/mapping-preview'
 import NeuronLogo from '../../assets/Neuron.svg'
 import Button from '../../ui/Button'
 
@@ -1455,9 +1456,29 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
       } else {
         errorMsg = String(error);
       }
-      setErrorMessage(`Error saving to Figma: ${errorMsg}`);
       
-      // Clear loading state
+      // Extract detailed error message from Figma API response if available
+      if (error && typeof error === 'object' && 'response' in error) {
+        const apiError = error as { 
+          response?: { 
+            data?: { 
+              message?: string;
+              error?: string;
+            } 
+          } 
+        };
+        
+        if (apiError.response?.data?.message) {
+          errorMsg = apiError.response.data.message;
+        } else if (apiError.response?.data?.error) {
+          errorMsg = apiError.response.data.error;
+        }
+      }
+      
+      setErrorMessage(`Error saving variable\n${errorMsg}`);
+      
+      // Clear loading state AND message
+      setLoadingMessage('');
       setIsLoading(false);
     }
   };
@@ -1760,10 +1781,16 @@ const VisualEditor = forwardRef<VisualEditorRefHandle, VisualEditorProps>(({ sel
                   </>
                 ) : 'Sync'}
               </Button>
-              <div className="mapping-preview-container">
-                <h3>Mapping Preview</h3>
-                <p>Variables mapping preview is currently unavailable.</p>
-              </div>
+              <MappingPreview 
+                figmaData={figmaData}
+                modeMapping={modeMapping}
+                selectedModes={selectedModes}
+                allVariables={allVariables}
+                selectedBrand={selectedBrand}
+                selectedGrade={selectedGrade}
+                selectedDevice={selectedDevice}
+                selectedThemes={selectedThemes}
+              />
              </div>
         
             {loadingMessage && (

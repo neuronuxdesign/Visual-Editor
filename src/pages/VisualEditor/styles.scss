@@ -224,6 +224,10 @@ li .tree-view-list {
   display: flex;
   gap: 10px;
   align-items: center;
+  
+  .mapping-preview-buttons {
+    margin-left: 15px;
+  }
 }
 
 .variables-path {
@@ -939,6 +943,7 @@ input[type="text"] {
     background-color: #fdeded;
     color: #d32f2f;
     border: 1px solid #f5c6c7;
+    white-space: pre-line;
   }
 }
 

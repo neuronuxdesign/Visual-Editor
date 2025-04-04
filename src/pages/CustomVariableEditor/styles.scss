@@ -22,7 +22,7 @@ $primary-color: #0066cc;
 
 .app-container {
   display: flex;
-  height: 100vh;
+  //height: 100vh;
   width: 100vw;
   overflow: hidden;
 }
@@ -44,10 +44,6 @@ $primary-color: #0066cc;
     padding: 16px;
     border-bottom: 1px solid #ddd;
     
-    .sidebar-logo {
-      width: 36px;
-      height: 36px;
-    }
   }
   
   .sidebar-content {
@@ -155,8 +151,7 @@ $primary-color: #0066cc;
   .main-area {
     flex: 1;
     padding: 24px;
-    overflow-y: auto;
-    
+
     .main-area-header {
       display: flex;
       justify-content: space-between;
@@ -166,7 +161,7 @@ $primary-color: #0066cc;
     
     .variables-header {
       display: flex;
-      justify-content: space-between;
+      //justify-content: space-between;
       align-items: center;
       margin-bottom: 0;
       
@@ -184,7 +179,7 @@ $primary-color: #0066cc;
         border-radius: 4px;
         cursor: pointer;
         font-size: 14px;
-        
+        margin-left: 16px;
         &:hover {
           background-color: #0052a3;
         }
@@ -241,7 +236,7 @@ $primary-color: #0066cc;
       
       &.multi-mode-table {
         position: relative;
-        overflow-x: auto;
+        //overflow-x: auto;
         max-height: calc(100vh - 280px);
         
         &::-webkit-scrollbar {
@@ -287,11 +282,11 @@ $primary-color: #0066cc;
             
             &.variable-info-cell {
               width: 200px;
-              min-width: 200px;
+              min-width: 340px;
               position: sticky;
               left: 0;
               z-index: 5;
-              background-color: inherit;
+              background-color: white;
               box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.1);
               
               .variable-info-content {
@@ -437,7 +432,7 @@ $primary-color: #0066cc;
               position: sticky;
               right: 0;
               z-index: 5;
-              background-color: inherit;
+              background-color: white;
               box-shadow: -2px 0 5px -2px rgba(0, 0, 0, 0.1);
               
               .action-btn {
@@ -462,7 +457,7 @@ $primary-color: #0066cc;
         }
         
         .variables-rows-container {
-          overflow-y: visible; /* Don't add vertical scroll here */
+          overflow-y: auto; /* Don't add vertical scroll here */
           overflow-x: visible; /* Don't add horizontal scroll here */
         }
       }
